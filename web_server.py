@@ -228,10 +228,14 @@ def ws_send_command(data):
 
 def start_server(host=None, port=None):
     """Start the web server (blocking). Call from a thread."""
-    h = host or config.server_host
-    p = port or config.server_port
-    logger.info(f"Starting web server on {h}:{p}")
-    socketio.run(app, host=h, port=p, use_reloader=False)
+    try:
+        h = host or config.server_host
+        p = port or config.server_port
+        logger.info(f"Starting web server on {h}:{p}")
+        # When frozen, we want to ensure we don't accidentally use reloader
+        socketio.run(app, host=h, port=p, use_reloader=False, allow_unsafe_werkzeug=True)
+    except Exception as e:
+        logger.error(f"CRITICAL: Web server failed to start: {e}", exc_info=True)
 
 
 def start_server_thread(host=None, port=None) -> threading.Thread:

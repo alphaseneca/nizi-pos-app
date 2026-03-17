@@ -25,6 +25,7 @@ a = Analysis(
         'flask',
         'flask_socketio',
         'engineio.async_drivers.threading',
+        'engineio.async_drivers.eventlet',
         'eventlet',
         'bidict',
         'engineio',
