@@ -9,6 +9,7 @@ import io
 import threading
 import logging
 from PIL import Image
+from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -284,8 +285,8 @@ class TrayFlyout(QWidget):
             | Qt.WindowType.WindowCloseButtonHint
         )
         # Resolve arrow icon path and inject into stylesheet
-        _base = os.path.dirname(os.path.abspath(__file__))
-        _arrow = os.path.join(_base, "assets", "dropdown_arrow.svg").replace("\\", "/")
+        _base = Path(__file__).resolve().parent
+        _arrow = (_base / "assets" / "dropdown_arrow.svg").as_posix()
         self.setStyleSheet(STYLESHEET.replace("{ARROW_PATH}", _arrow))
 
         self.status_updated.connect(self._on_status_updated)

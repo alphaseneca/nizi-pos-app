@@ -22,6 +22,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("nizipos")
 
+from config import config
+
 # ── Resolve paths when running as frozen exe ─────────────────────────────
 
 if getattr(sys, "frozen", False):
@@ -43,8 +45,8 @@ def main():
     logger.info("═" * 50)
 
     # Start web server in a background thread
-    server_thread = start_server_thread(host="0.0.0.0", port=5123)
-    logger.info("Web server thread started → http://localhost:5123")
+    server_thread = start_server_thread()
+    logger.info(f"Web server thread started → http://{config.server_host}:{config.server_port}")
 
     # Get the shared device manager from the web server module
     device = get_device_manager()
@@ -55,7 +57,8 @@ def main():
     # Quit handler — called when user clicks "Quit" in system tray
     def on_quit():
         logger.info("Shutting down …")
-        os._exit(0)  # force-exit all threads
+        device.disconnect()
+        QApplication.quit()
 
     # Create the PyQt6 Application
     from PyQt6.QtWidgets import QApplication

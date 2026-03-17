@@ -5,3 +5,4 @@ pystray
 Pillow
 pyinstaller
 pyqt6
+platformdirs

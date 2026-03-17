@@ -6,6 +6,26 @@
 
 const socket = io();
 let selectedImageFile = null;
+let apiKey = null;
+
+// ── Authentication ───────────────────────────────────────────────────
+
+async function fetchApiKey() {
+    try {
+        const res = await fetch("/api/auth-token");
+        const data = await res.json();
+        if (data.token) {
+            apiKey = data.token;
+            console.log("API Key acquired.");
+            return true;
+        }
+    } catch (err) {
+        console.error("Failed to fetch API key:", err);
+    }
+    return false;
+}
+
+// ── SocketIO Connection ──────────────────────────────────────────────
 
 socket.on("connect", () => {
     addLog("WebSocket connected.", "info");
@@ -50,7 +70,17 @@ function updateStatusUI(connected, port) {
 // ── API Calls ────────────────────────────────────────────────────────
 
 async function api(method, url, body = null) {
-    const opts = { method, headers: {} };
+    if (!apiKey && url !== "/api/auth-token") {
+        const success = await fetchApiKey();
+        if (!success) return { success: false, error: "Authentication failed" };
+    }
+
+    const opts = { 
+        method, 
+        headers: {
+            "X-API-Key": apiKey
+        } 
+    };
     if (body && !(body instanceof FormData)) {
         opts.headers["Content-Type"] = "application/json";
         opts.body = JSON.stringify(body);

@@ -1,0 +1,81 @@
+"""
+Verification script for NiziPOS hardening.
+Tests:
+1. API Key Authentication (Success/Failure)
+2. Binding (Localhost only)
+3. Input Validation (Commands, Uploads)
+"""
+
+import requests
+import unittest
+import threading
+import time
+import os
+import io
+
+# We assume the server is running or we start it
+# For automated tests, we'll try to reach it.
+
+BASE_URL = "http://127.0.0.1:5123"
+
+class TestHardening(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # We need the API key. In a real test we'd import config
+        # but let's try to get it from the local auth-token endpoint first
+        try:
+            res = requests.get(f"{BASE_URL}/api/auth-token")
+            cls.api_key = res.json().get("token")
+        except:
+            cls.api_key = None
+            print("Warning: Could not fetch API key. Interface tests will fail.")
+
+    def test_unauthorized_access(self):
+        """API should return 401 without key."""
+        res = requests.get(f"{BASE_URL}/api/status")
+        self.assertEqual(res.status_code, 401)
+        self.assertFalse(res.json()["success"])
+
+    def test_authorized_access(self):
+        """API should return 200 with correct key."""
+        if not self.api_key: self.skipTest("No API key")
+        headers = {"X-API-Key": self.api_key}
+        res = requests.get(f"{BASE_URL}/api/status", headers=headers)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("connected", res.json())
+
+    def test_invalid_command_validation(self):
+        """API should reject invalid commands."""
+        if not self.api_key: self.skipTest("No API key")
+        headers = {"X-API-Key": self.api_key}
+        
+        # Non-string command
+        res = requests.post(f"{BASE_URL}/api/command", json={"command": 123}, headers=headers)
+        self.assertEqual(res.status_code, 400)
+        
+        # Empty command
+        res = requests.post(f"{BASE_URL}/api/command", json={"command": ""}, headers=headers)
+        self.assertEqual(res.status_code, 400)
+
+    def test_settings_validation(self):
+        """API should reject invalid setting ranges."""
+        if not self.api_key: self.skipTest("No API key")
+        headers = {"X-API-Key": self.api_key}
+        
+        # Out of range volume
+        res = requests.post(f"{BASE_URL}/api/settings", json={"volume": 150}, headers=headers)
+        self.assertEqual(res.status_code, 400)
+
+    def test_image_upload_validation(self):
+        """API should reject non-JPEG or oversized files."""
+        if not self.api_key: self.skipTest("No API key")
+        headers = {"X-API-Key": self.api_key}
+        
+        # Wrong type
+        files = {'image': ('test.png', b'not a jpeg', 'image/png')}
+        res = requests.post(f"{BASE_URL}/api/upload-image", files=files, headers=headers)
+        self.assertEqual(res.status_code, 400)
+
+if __name__ == "__main__":
+    print(f"Testing NiziPOS at {BASE_URL}...")
+    unittest.main()

@@ -6,7 +6,17 @@ Build with:  pyinstaller build.spec
 
 import os
 
-block_cipher = None
+import platform
+
+# Identify pystray backend based on OS
+pystray_backend = []
+if platform.system() == "Windows":
+    pystray_backend = ['pystray._win32']
+elif platform.system() == "Darwin":
+    pystray_backend = ['pystray._darwin']
+else: # Linux
+    pystray_backend = ['pystray._xorg', 'pystray._appindicator']
+
 base_dir = os.path.dirname(os.path.abspath(SPEC))
 
 a = Analysis(
@@ -15,6 +25,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (os.path.join(base_dir, 'static'), 'static'),
+        (os.path.join(base_dir, 'assets'), 'assets'),
     ],
     hiddenimports=[
         'flask',
@@ -24,20 +35,19 @@ a = Analysis(
         'serial.tools',
         'serial.tools.list_ports',
         'pystray',
-        'pystray._win32',
         'PIL',
-    ],
+        'platformdirs',
+    ] + pystray_backend,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
-    cipher=block_cipher,
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,
