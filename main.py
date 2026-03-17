@@ -15,14 +15,20 @@ import sys
 
 # ── Logging ──────────────────────────────────────────────────────────────
 
+from config import config
+
+# Ensure log directory exists
+log_file = config.config_dir / "app.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-7s  %(name)s  %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.FileHandler(log_file, encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger("nizipos")
-
-from config import config
 
 # ── Resolve paths when running as frozen exe ─────────────────────────────
 
@@ -45,8 +51,12 @@ def main():
     logger.info("═" * 50)
 
     # Start web server in a background thread
-    server_thread = start_server_thread()
-    logger.info(f"Web server thread started → http://{config.server_host}:{config.server_port}")
+    try:
+        server_thread = start_server_thread()
+        logger.info(f"Web server thread started → http://{config.server_host}:{config.server_port}")
+    except Exception as e:
+        logger.error(f"Failed to start web server: {e}")
+        # On macOS bundle failure, we might want to alert the user or just keep the tray running
 
     # Get the shared device manager from the web server module
     device = get_device_manager()

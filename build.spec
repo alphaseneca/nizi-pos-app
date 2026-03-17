@@ -25,6 +25,9 @@ a = Analysis(
         'flask',
         'flask_socketio',
         'engineio.async_drivers.threading',
+        'eventlet',
+        'bidict',
+        'engineio',
         'serial',
         'serial.tools',
         'serial.tools.list_ports',
@@ -46,34 +49,43 @@ pyz = PYZ(a.pure, a.zipped_data)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='NiziPOS',
+    [],                      # Move binaries/zipfiles/datas to COLLECT for non-onefile macOS bundle
+    exclude_binaries=True,   # Required for BUNDLE on macOS sometimes
+    name='NiziposExe',       # Internal name
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,           # ← no terminal window on Windows
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,               # add .ico path here if desired
+    icon=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='NiziPOS',
 )
 
 # Added BUNDLE for macOS to create a proper .app and hide terminal
 if is_mac:
     app = BUNDLE(
-        exe,
+        coll,                # Use collective binaries
         name='NiziPOS.app',
         icon=None,
         bundle_identifier='com.nizipos.backgroundapp',
         info_plist={
-            'LSUIElement': True,  # Hide from Dock (optional, usually good for tray apps)
+            'LSUIElement': True,
             'NSHighResolutionCapable': 'True'
         },
     )

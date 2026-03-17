@@ -26,6 +26,7 @@ app.config["SECRET_KEY"] = config.api_key
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB limit
 
 # Restrict CORS to localhost
+# Use 'threading' async mode which is the most compatible with PyInstaller standard builds
 socketio = SocketIO(
     app, 
     cors_allowed_origins=[
