@@ -87,9 +87,9 @@ class TrayApp:
     def _on_exit(self, icon, item):
         """Menu: Quit the application."""
         logger.info("Tray: quit requested")
-        self._device.disconnect()
         icon.stop()
         if self._on_quit:
+            # Let the main thread's quit handler take care of it
             self._on_quit()
 
     def _build_menu(self):

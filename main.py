@@ -58,7 +58,7 @@ def main():
     def on_quit():
         logger.info("Shutting down …")
         device.disconnect()
-        QApplication.quit()
+        os._exit(0)  # Ensure all threads are terminated immediately
 
     # Create the PyQt6 Application
     from PyQt6.QtWidgets import QApplication
