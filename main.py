@@ -69,10 +69,8 @@ def main():
     from ui_app import TrayFlyout
     ui = TrayFlyout(device_manager=device, web_port=5123, on_quit=on_quit)
 
-    # Run system tray in a background thread so UI can run on main thread
+    # Run system tray on the main thread
     tray = TrayApp(device_manager=device, ui_app=ui, on_quit=on_quit)
-    import threading
-    threading.Thread(target=tray.run, daemon=True).start()
     
     # Run UI on main thread (required by Qt)
     sys.exit(app.exec())

@@ -5,11 +5,12 @@ Icon color changes based on device connection state.
 """
 
 import logging
-import threading
 import webbrowser
-
+from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtCore import QObject
 from PIL import Image, ImageDraw
-import pystray
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,8 @@ WEB_PORT = 5123
 ICON_SIZE = 64
 
 
-def _create_icon_image(connected: bool) -> Image.Image:
-    """Generate a simple colored icon: green if connected, gray if not."""
+def _create_qicon(connected: bool) -> QIcon:
+    """Generate a simple colored icon: green if connected, gray if not, as a QIcon."""
     img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
@@ -34,18 +35,34 @@ def _create_icon_image(connected: bool) -> Image.Image:
     draw.line([(m, m), (ICON_SIZE - m, ICON_SIZE - m)], fill=inner_color, width=4)
     draw.line([(ICON_SIZE - m, ICON_SIZE - m), (ICON_SIZE - m, m)], fill=inner_color, width=4)
 
-    return img
+    # Convert PIL Image to QIcon via bytes
+    byte_array = io.BytesIO()
+    img.save(byte_array, format="PNG")
+    from PyQt6.QtGui import QPixmap
+    pixmap = QPixmap()
+    pixmap.loadFromData(byte_array.getvalue())
+    return QIcon(pixmap)
 
 
-class TrayApp:
-    """System tray application for NiziPOS background service."""
+class TrayApp(QObject):
+    """System tray application for NiziPOS background service using PyQt6."""
 
     def __init__(self, device_manager, ui_app=None, on_quit=None):
+        super().__init__()
         self._device = device_manager
         self._ui_app = ui_app
         self._on_quit = on_quit
-        self._icon: pystray.Icon | None = None
         self._connected = device_manager.connected
+
+        # Initialize QSystemTrayIcon
+        self._tray_icon = QSystemTrayIcon(self)
+        self._update_icon()
+        self._tray_icon.setContextMenu(self._build_menu())
+        
+        # Connect activation signal (e.g. double click)
+        self._tray_icon.activated.connect(self._on_tray_activated)
+        
+        self._tray_icon.show()
 
         # Listen for device status changes
         original_callback = device_manager._on_status_change
@@ -60,13 +77,18 @@ class TrayApp:
 
     def _update_icon(self):
         """Update the tray icon image to reflect connection state."""
-        if self._icon:
-            self._icon.icon = _create_icon_image(self._connected)
-            tip = "NiziPOS — Connected" if self._connected else "NiziPOS — Disconnected"
-            self._icon.title = tip
+        self._tray_icon.setIcon(_create_qicon(self._connected))
+        tip = "NiziPOS — Connected" if self._connected else "NiziPOS — Disconnected"
+        self._tray_icon.setToolTip(tip)
 
-    def _on_connect(self, icon, item):
+    def _on_tray_activated(self, reason):
+        """Handle tray icon click."""
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._on_toggle_ui()
+
+    def _on_connect(self):
         """Menu: Connect device (auto-detect)."""
+        import threading
         def _do():
             result = self._device.connect()
             if result["success"]:
@@ -75,48 +97,48 @@ class TrayApp:
                 logger.warning(f"Tray: connect failed — {result['error']}")
         threading.Thread(target=_do, daemon=True).start()
 
-    def _on_disconnect(self, icon, item):
+    def _on_disconnect(self):
         """Menu: Disconnect device."""
         self._device.disconnect()
 
-    def _on_toggle_ui(self, icon, item):
+    def _on_toggle_ui(self):
         """Menu: Show the native popup UI."""
         if self._ui_app:
             self._ui_app.toggle()
 
-    def _on_exit(self, icon, item):
+    def _on_exit(self):
         """Menu: Quit the application."""
         logger.info("Tray: quit requested")
-        icon.stop()
+        self._tray_icon.hide()
         if self._on_quit:
-            # Let the main thread's quit handler take care of it
             self._on_quit()
 
     def _build_menu(self):
-        return pystray.Menu(
-            pystray.MenuItem("Show Menu", self._on_toggle_ui, default=True),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Connect Device", self._on_connect),
-            pystray.MenuItem("Disconnect", self._on_disconnect),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit NiziPOS", self._on_exit),
-        )
-
-    def run(self):
-        """
-        Run the system tray icon (blocking — must be called on the main
-        thread on Windows).
-        """
-        self._icon = pystray.Icon(
-            name="NiziPOS",
-            icon=_create_icon_image(self._connected),
-            title="NiziPOS — Connected" if self._connected else "NiziPOS — Disconnected",
-            menu=self._build_menu(),
-        )
-        logger.info("System tray started")
-        self._icon.run()
+        menu = QMenu()
+        
+        show_action = QAction("Show Menu", self)
+        show_action.triggered.connect(self._on_toggle_ui)
+        show_action.setCheckable(False)
+        menu.addAction(show_action)
+        
+        menu.addSeparator()
+        
+        connect_action = QAction("Connect Device", self)
+        connect_action.triggered.connect(self._on_connect)
+        menu.addAction(connect_action)
+        
+        disconnect_action = QAction("Disconnect", self)
+        disconnect_action.triggered.connect(self._on_disconnect)
+        menu.addAction(disconnect_action)
+        
+        menu.addSeparator()
+        
+        quit_action = QAction("Quit NiziPOS", self)
+        quit_action.triggered.connect(self._on_exit)
+        menu.addAction(quit_action)
+        
+        return menu
 
     def stop(self):
         """Stop the tray icon programmatically."""
-        if self._icon:
-            self._icon.stop()
+        self._tray_icon.hide()
