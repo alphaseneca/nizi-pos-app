@@ -125,6 +125,26 @@ class DeviceManager:
         
         return None
 
+    def get_available_ports(self) -> list[dict]:
+        """
+        Return a list of available serial ports with metadata.
+        Each entry: {"port": str, "description": str, "is_ch340": bool}
+        """
+        ports = []
+        for p in serial.tools.list_ports.comports():
+            is_ch340 = (
+                p.vid == CH340_VID or 
+                (p.pid in CH340_PIDS) or 
+                "CH340" in (p.description or "").upper() or
+                "CH340" in (p.hwid or "").upper()
+            )
+            ports.append({
+                "port": p.device,
+                "description": p.description,
+                "is_ch340": is_ch340
+            })
+        return ports
+
     def _probe_port(self, device: str) -> str | None:
         """Internal helper to probe a specific port for the device ID."""
         try:

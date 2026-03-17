@@ -340,6 +340,29 @@ class TrayFlyout(QWidget):
         self.btn_action.clicked.connect(self._manual_connect)
         card_layout.addWidget(self.btn_action)
 
+        # Port selection area (only visible when disconnected)
+        self.port_selection_container = QWidget()
+        port_layout = QVBoxLayout(self.port_selection_container)
+        port_layout.setContentsMargins(0, 8, 0, 0)
+        port_layout.setSpacing(8)
+
+        port_header = QHBoxLayout()
+        port_header.addWidget(self._make_field_label("Select Port Manually"))
+        port_header.addStretch()
+        
+        self.btn_rescan = QPushButton("Rescan")
+        self.btn_rescan.setObjectName("ghostBtn")
+        self.btn_rescan.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_rescan.clicked.connect(self._rescan_ports)
+        port_header.addWidget(self.btn_rescan)
+        port_layout.addLayout(port_header)
+
+        self.port_dropdown = QComboBox()
+        self.port_dropdown.setPlaceholderText("Select a port...")
+        port_layout.addWidget(self.port_dropdown)
+        
+        card_layout.addWidget(self.port_selection_container)
+
         root.addWidget(card)
 
         # ── Commands area (hidden when disconnected) ─────────────────────
@@ -639,6 +662,21 @@ class TrayFlyout(QWidget):
 
         threading.Thread(target=_work, daemon=True).start()
 
+    def _rescan_ports(self):
+        """Populate the port dropdown with available serial ports."""
+        self.port_dropdown.clear()
+        ports = self.device.get_available_ports()
+        
+        if not ports:
+            self.port_dropdown.addItem("No ports found")
+            return
+
+        for p in ports:
+            label = f"{p['port']} - {p['description']}"
+            if p["is_ch340"]:
+                label += " (NiziPOS)"
+            self.port_dropdown.addItem(label, p["port"])
+
     # ── Slot handlers ────────────────────────────────────────────────────
 
     @pyqtSlot(str, str, bool)
@@ -662,6 +700,7 @@ class TrayFlyout(QWidget):
             self.btn_action.setEnabled(True)
 
             self.commands_container.setVisible(True)
+            self.port_selection_container.setVisible(False)
             if self.img_file_path:
                 self.btn_upload_img.setEnabled(True)
         else:
@@ -676,6 +715,8 @@ class TrayFlyout(QWidget):
             self.btn_action.setEnabled(True)
 
             self.commands_container.setVisible(False)
+            self.port_selection_container.setVisible(True)
+            self._rescan_ports()
 
         self.adjustSize()
 
@@ -683,12 +724,14 @@ class TrayFlyout(QWidget):
         if self.device.connected:
             self.device.disconnect()
         else:
+            selected_port = self.port_dropdown.currentData()
+            
             self.btn_action.setEnabled(False)
             self.btn_action.setText("Connecting…")
 
             def _do():
-                res = self.device.connect()
-                if not getattr(res, "success", False):
+                res = self.device.connect(port=selected_port)
+                if not res.get("success", False):
                     self.status_updated.emit(self.device.connected, self.device.port or "")
 
             threading.Thread(target=_do, daemon=True).start()
