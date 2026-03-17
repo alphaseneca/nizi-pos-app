@@ -40,6 +40,7 @@ class DeviceManager:
         self._lock = threading.Lock()
         self._port: str | None = None
         self._connected = False
+        self._auto_connect = True  # Flag to enable/disable auto-connection polling
         self._on_status_change = None  # callback(connected: bool, port: str | None)
 
     # ── Properties ──────────────────────────────────────────────────────
@@ -51,6 +52,11 @@ class DeviceManager:
     @property
     def port(self) -> str | None:
         return self._port
+
+    def enable_auto_connect(self, enabled: bool):
+        """Enable or disable the background auto-connect polling logic."""
+        self._auto_connect = enabled
+        logger.info(f"Auto-connect polling set to: {enabled}")
 
     def set_status_callback(self, callback):
         """Set a callback for connection status changes: callback(connected, port)."""
@@ -67,16 +73,17 @@ class DeviceManager:
         """Start a background thread that polls for the device if disconnected."""
         def _poll():
             while True:
-                if not self.connected:
-                    port = self.auto_detect()
-                    if port:
-                        self.connect(port)
-                else:
-                    # Check if the currently connected port is physically still attached
-                    active_ports = [p.device for p in serial.tools.list_ports.comports()]
-                    if self.port not in active_ports:
-                        logger.warning(f"Device physically unplugged: {self.port}")
-                        self.disconnect()
+                if self._auto_connect:
+                    if not self.connected:
+                        port = self.auto_detect()
+                        if port:
+                            self.connect(port)
+                    else:
+                        # Check if the currently connected port is physically still attached
+                        active_ports = [p.device for p in serial.tools.list_ports.comports()]
+                        if self.port not in active_ports:
+                            logger.warning(f"Device physically unplugged: {self.port}")
+                            self.disconnect()
                 time.sleep(3)
                 
         t = threading.Thread(target=_poll, daemon=True)

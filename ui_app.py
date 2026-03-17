@@ -14,7 +14,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QLineEdit, QTextEdit, QFileDialog,
-    QFrame, QApplication, QStackedWidget, QSizePolicy
+    QFrame, QApplication, QStackedWidget, QSizePolicy,
+    QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QFont
@@ -261,6 +262,37 @@ QPushButton#disconnectBtn:hover {
     border-color: #a5b4fc;
     color: #374151;
 }
+
+/* ── Radio Buttons ────────────────────────────────────── */
+
+QRadioButton {
+    font-size: 10pt;
+    color: #374151;
+    spacing: 8px;
+    padding: 4px;
+}
+QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d5db;
+    border-radius: 11px;
+    background: #ffffff;
+}
+QRadioButton::indicator:hover {
+    border-color: #a5b4fc;
+}
+QRadioButton::indicator:checked {
+    border-color: #6366f1;
+    background-color: #6366f1;
+    image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjUiLz48L3N2Zz4=);
+}
+QRadioButton:disabled {
+    color: #9ca3af;
+}
+QRadioButton::indicator:disabled {
+    border-color: #e5e7eb;
+    background-color: #f9fafb;
+}
 """
 
 
@@ -323,7 +355,31 @@ class TrayFlyout(QWidget):
         card.setObjectName("statusCard")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(6)
+        card_layout.setSpacing(12)
+
+        # Mode Selection (Radio Group)
+        self.mode_container = QHBoxLayout()
+        self.mode_container.setSpacing(20)
+        
+        mode_lbl = QLabel("Auto-Connect:")
+        mode_lbl.setObjectName("fieldLabel")
+        mode_lbl.setStyleSheet("margin-top: 0px; font-weight: 600; color: #374151;")
+        self.mode_container.addWidget(mode_lbl)
+
+        self.radio_auto = QRadioButton("Auto")
+        self.radio_manual = QRadioButton("Manual")
+        self.radio_auto.setChecked(True)
+        
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.addButton(self.radio_auto)
+        self.mode_group.addButton(self.radio_manual)
+        self.mode_group.buttonClicked.connect(self._on_mode_changed)
+
+        self.mode_container.addWidget(self.radio_auto)
+        self.mode_container.addWidget(self.radio_manual)
+        self.mode_container.addStretch()
+        
+        card_layout.addLayout(self.mode_container)
 
         self.status_label = QLabel("Disconnected")
         self.status_label.setObjectName("statusLabel")
@@ -677,6 +733,15 @@ class TrayFlyout(QWidget):
                 label += " (NiziPOS)"
             self.port_dropdown.addItem(label, p["port"])
 
+    def _on_mode_changed(self, button):
+        """Handle auto/manual mode switching."""
+        is_auto = button == self.radio_auto
+        self.device.enable_auto_connect(is_auto)
+        
+        # If switching to manual while disconnected, ensure port UI is visible
+        # If switching to auto while disconnected, polling will start
+        self._on_status_updated(self.device.connected, self.device.port or "")
+
     # ── Slot handlers ────────────────────────────────────────────────────
 
     @pyqtSlot(str, str, bool)
@@ -715,8 +780,14 @@ class TrayFlyout(QWidget):
             self.btn_action.setEnabled(True)
 
             self.commands_container.setVisible(False)
-            self.port_selection_container.setVisible(True)
-            self._rescan_ports()
+            
+            # Port selection only visible in Manual mode when disconnected
+            is_manual = self.radio_manual.isChecked()
+            self.port_selection_container.setVisible(is_manual)
+            self.instruction_label.setVisible(not is_manual)
+            
+            if is_manual:
+                self._rescan_ports()
 
         self.adjustSize()
 
