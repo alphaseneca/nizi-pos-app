@@ -10,11 +10,13 @@ import logging
 
 import serial
 import serial.tools.list_ports
+import re
 
 logger = logging.getLogger(__name__)
 
 DEVICE_ID_COMMAND = "DEVICE_ID"
-DEVICE_ID_RESPONSE = "NIZI_POS_B31"
+# Support NIZIPOS_B3X or NIZI_POS_B3X (X is 0-9)
+DEVICE_ID_PATTERN = re.compile(r"NIZI_?POS_B3\d", re.IGNORECASE)
 DEFAULT_BAUD_RATE = 115200
 SERIAL_TIMEOUT = 2  # seconds
 
@@ -141,7 +143,7 @@ class DeviceManager:
             response = ser.readline().decode("utf-8", errors="ignore").strip()
             logger.info(f"  ← {response!r}")
 
-            if DEVICE_ID_RESPONSE in response:
+            if DEVICE_ID_PATTERN.search(response):
                 ser.close()
                 return device
 
