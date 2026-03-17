@@ -25,6 +25,10 @@ IMAGE_ACK_OK = b"K"
 IMAGE_ACK_ERR = b"E"
 IMAGE_READY = b"R"
 
+# CH340 Chipset Identifiers (for optimized discovery)
+CH340_VID = 0x1A86
+CH340_PIDS = [0x7523, 0x5523, 0x5512, 0x7522]
+
 
 class DeviceManager:
     """Thread-safe manager for NiziPOS UART device communication."""
@@ -80,35 +84,70 @@ class DeviceManager:
 
     def auto_detect(self) -> str | None:
         """
-        Scan all COM ports, send DEVICE_ID, and return the port that
-        responds with NIZI_POS_B31.  Returns None if not found.
+        Scan COM ports, prioritizing CH340 chipsets.
+        Sends DEVICE_ID and returns the port that responds with NIZI_POS_B31.
         """
-        ports = serial.tools.list_ports.comports()
-        for p in ports:
-            try:
-                logger.info(f"Probing {p.device} ...")
-                ser = serial.Serial(
-                    p.device,
-                    baudrate=DEFAULT_BAUD_RATE,
-                    timeout=SERIAL_TIMEOUT,
-                )
-                time.sleep(0.1)  # let device settle
+        all_ports = serial.tools.list_ports.comports()
+        
+        # 1. Prioritize ports with CH340 VID/PID or "CH340" in description
+        priority_ports = []
+        other_ports = []
+        
+        for p in all_ports:
+            is_ch340 = (
+                p.vid == CH340_VID or 
+                (p.pid in CH340_PIDS) or 
+                "CH340" in (p.description or "").upper() or
+                "CH340" in (p.hwid or "").upper()
+            )
+            if is_ch340:
+                priority_ports.append(p)
+            else:
+                other_ports.append(p)
 
-                ser.reset_input_buffer()
-                ser.write((DEVICE_ID_COMMAND + "\n").encode("utf-8"))
-                ser.flush()
+        # 2. Probe priority ports first
+        for p in priority_ports:
+            port_name = self._probe_port(p.device)
+            if port_name:
+                return port_name
 
-                response = ser.readline().decode("utf-8", errors="ignore").strip()
-                logger.info(f"  ← {response!r}")
+        # 3. Fallback to other ports if priority ones didn't work
+        # (Optional: user's environment might have multiple ports and they want it fast, 
+        # so we only probe others if no priority ports were even found)
+        if not priority_ports:
+            logger.info("No CH340 devices matched, scanning other ports...")
+            for p in other_ports:
+                port_name = self._probe_port(p.device)
+                if port_name:
+                    return port_name
+        
+        return None
 
-                if DEVICE_ID_RESPONSE in response:
-                    ser.close()
-                    return p.device
+    def _probe_port(self, device: str) -> str | None:
+        """Internal helper to probe a specific port for the device ID."""
+        try:
+            logger.info(f"Probing {device} ...")
+            ser = serial.Serial(
+                device,
+                baudrate=DEFAULT_BAUD_RATE,
+                timeout=SERIAL_TIMEOUT,
+            )
+            time.sleep(0.1)  # let device settle
 
+            ser.reset_input_buffer()
+            ser.write((DEVICE_ID_COMMAND + "\n").encode("utf-8"))
+            ser.flush()
+
+            response = ser.readline().decode("utf-8", errors="ignore").strip()
+            logger.info(f"  ← {response!r}")
+
+            if DEVICE_ID_RESPONSE in response:
                 ser.close()
-            except (serial.SerialException, OSError) as exc:
-                logger.debug(f"  skip {p.device}: {exc}")
-                continue
+                return device
+
+            ser.close()
+        except (serial.SerialException, OSError) as exc:
+            logger.debug(f"  skip {device}: {exc}")
         return None
 
     def connect(self, port: str | None = None) -> dict:
