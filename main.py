@@ -1,0 +1,79 @@
+"""
+NiziPOS Background Application — Entry Point
+
+Starts:
+  1. Flask web server (daemon thread) on port 5123
+  2. System tray icon (main thread)
+
+The tray icon provides connect/disconnect/open dashboard/quit controls.
+Visit http://localhost:5123 for the full web dashboard.
+"""
+
+import logging
+import os
+import sys
+
+# ── Logging ──────────────────────────────────────────────────────────────
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-7s  %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("nizipos")
+
+# ── Resolve paths when running as frozen exe ─────────────────────────────
+
+if getattr(sys, "frozen", False):
+    # Running as PyInstaller bundle
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Ensure Flask can find the static folder
+os.chdir(BASE_DIR)
+
+
+def main():
+    from web_server import start_server_thread, get_device_manager
+    from tray_app import TrayApp
+
+    logger.info("═" * 50)
+    logger.info("  NiziPOS Background App starting …")
+    logger.info("═" * 50)
+
+    # Start web server in a background thread
+    server_thread = start_server_thread(host="0.0.0.0", port=5123)
+    logger.info("Web server thread started → http://localhost:5123")
+
+    # Get the shared device manager from the web server module
+    device = get_device_manager()
+
+    # Start auto-connect polling
+    device.start_auto_connect()
+
+    # Quit handler — called when user clicks "Quit" in system tray
+    def on_quit():
+        logger.info("Shutting down …")
+        os._exit(0)  # force-exit all threads
+
+    # Create the PyQt6 Application
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
+    # Create the floating PyQt UI
+    from ui_app import TrayFlyout
+    ui = TrayFlyout(device_manager=device, web_port=5123, on_quit=on_quit)
+
+    # Run system tray in a background thread so UI can run on main thread
+    tray = TrayApp(device_manager=device, ui_app=ui, on_quit=on_quit)
+    import threading
+    threading.Thread(target=tray.run, daemon=True).start()
+    
+    # Run UI on main thread (required by Qt)
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

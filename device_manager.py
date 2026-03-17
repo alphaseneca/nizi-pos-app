@@ -1,0 +1,301 @@
+"""
+NiziPOS Device Manager
+Handles serial (UART) communication with the NiziPOS display device.
+"""
+
+import struct
+import threading
+import time
+import logging
+
+import serial
+import serial.tools.list_ports
+
+logger = logging.getLogger(__name__)
+
+DEVICE_ID_COMMAND = "DEVICE_ID"
+DEVICE_ID_RESPONSE = "NIZI_POS_B31"
+DEFAULT_BAUD_RATE = 115200
+SERIAL_TIMEOUT = 2  # seconds
+
+# Image upload constants
+IMAGE_START_COMMAND = "START_RTIMAGE"
+IMAGE_MAGIC_FRAME = struct.pack("<I", 0xAA55CC33) # 0xAA55CC33
+IMAGE_ACK_OK = b"K"
+IMAGE_ACK_ERR = b"E"
+IMAGE_READY = b"R"
+
+
+class DeviceManager:
+    """Thread-safe manager for NiziPOS UART device communication."""
+
+    def __init__(self):
+        self._serial: serial.Serial | None = None
+        self._lock = threading.Lock()
+        self._port: str | None = None
+        self._connected = False
+        self._on_status_change = None  # callback(connected: bool, port: str | None)
+
+    # ── Properties ──────────────────────────────────────────────────────
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    @property
+    def port(self) -> str | None:
+        return self._port
+
+    def set_status_callback(self, callback):
+        """Set a callback for connection status changes: callback(connected, port)."""
+        self._on_status_change = callback
+
+    def _notify_status(self):
+        if self._on_status_change:
+            try:
+                self._on_status_change(self._connected, self._port)
+            except Exception:
+                pass
+
+    def start_auto_connect(self):
+        """Start a background thread that polls for the device if disconnected."""
+        def _poll():
+            while True:
+                if not self.connected:
+                    port = self.auto_detect()
+                    if port:
+                        self.connect(port)
+                else:
+                    # Check if the currently connected port is physically still attached
+                    active_ports = [p.device for p in serial.tools.list_ports.comports()]
+                    if self.port not in active_ports:
+                        logger.warning(f"Device physically unplugged: {self.port}")
+                        self.disconnect()
+                time.sleep(3)
+                
+        t = threading.Thread(target=_poll, daemon=True)
+        t.start()
+
+    # ── Connection ──────────────────────────────────────────────────────
+
+    def auto_detect(self) -> str | None:
+        """
+        Scan all COM ports, send DEVICE_ID, and return the port that
+        responds with NIZI_POS_B31.  Returns None if not found.
+        """
+        ports = serial.tools.list_ports.comports()
+        for p in ports:
+            try:
+                logger.info(f"Probing {p.device} ...")
+                ser = serial.Serial(
+                    p.device,
+                    baudrate=DEFAULT_BAUD_RATE,
+                    timeout=SERIAL_TIMEOUT,
+                )
+                time.sleep(0.1)  # let device settle
+
+                ser.reset_input_buffer()
+                ser.write((DEVICE_ID_COMMAND + "\n").encode("utf-8"))
+                ser.flush()
+
+                response = ser.readline().decode("utf-8", errors="ignore").strip()
+                logger.info(f"  ← {response!r}")
+
+                if DEVICE_ID_RESPONSE in response:
+                    ser.close()
+                    return p.device
+
+                ser.close()
+            except (serial.SerialException, OSError) as exc:
+                logger.debug(f"  skip {p.device}: {exc}")
+                continue
+        return None
+
+    def connect(self, port: str | None = None) -> dict:
+        """
+        Connect to the device.  If *port* is None, auto-detect is used.
+        Returns {"success": bool, "port": str | None, "error": str | None}.
+        """
+        with self._lock:
+            if self._connected:
+                return {"success": True, "port": self._port, "error": None}
+
+            if port is None:
+                port = self.auto_detect()
+                if port is None:
+                    return {
+                        "success": False,
+                        "port": None,
+                        "error": "No NiziPOS device found on any COM port.",
+                    }
+
+            try:
+                self._serial = serial.Serial(
+                    port,
+                    baudrate=DEFAULT_BAUD_RATE,
+                    timeout=SERIAL_TIMEOUT,
+                )
+                time.sleep(0.1)
+                self._port = port
+                self._connected = True
+                logger.info(f"Connected to {port}")
+                self._notify_status()
+                return {"success": True, "port": port, "error": None}
+            except serial.SerialException as exc:
+                return {"success": False, "port": port, "error": str(exc)}
+
+    def disconnect(self) -> dict:
+        """Disconnect from the device."""
+        with self._lock:
+            if self._serial and self._serial.is_open:
+                try:
+                    self._serial.close()
+                except Exception:
+                    pass
+            self._serial = None
+            self._port = None
+            self._connected = False
+            logger.info("Disconnected")
+            self._notify_status()
+            return {"success": True}
+
+    # ── Commands ────────────────────────────────────────────────────────
+
+    def send_command(self, command: str) -> dict:
+        """
+        Send a text command to the device (newline-terminated).
+        Returns {"success": bool, "error": str | None}.
+        """
+        with self._lock:
+            if not self._connected or not self._serial or not self._serial.is_open:
+                return {"success": False, "error": "Device not connected."}
+            try:
+                self._serial.reset_input_buffer()
+                self._serial.write((command + "\n").encode("utf-8"))
+                self._serial.flush()
+                logger.info(f"Sent: {command}")
+                return {"success": True, "error": None}
+            except serial.SerialException as exc:
+                logger.error(f"Send error: {exc}")
+                self._connected = False
+                self._notify_status()
+                return {"success": False, "error": str(exc)}
+
+    # ── Convenience command helpers ─────────────────────────────────────
+
+    def send_idle(self):
+        return self.send_command("IDLE")
+
+    def send_text(self, title: str, subtitle: str, message: str):
+        return self.send_command(f"TEXT**{title}**{subtitle}**{message}")
+
+    def send_qr(self, amount: str, scan_text: str, payload: str):
+        return self.send_command(f"QR**{amount}**{scan_text}**{payload}")
+
+    def send_wait(self, amount: str, message: str):
+        return self.send_command(f"WAIT**{amount}**{message}")
+
+    def send_pass(self, title: str, message: str):
+        return self.send_command(f"PASS**{title}**{message}")
+
+    def send_fail(self, amount: str, message: str):
+        return self.send_command(f"FAIL**{amount}**{message}")
+
+    def send_warn(self, title: str, message: str):
+        return self.send_command(f"WARN**{title}**{message}")
+
+    def send_info(self, title: str, message: str):
+        return self.send_command(f"INFO**{title}**{message}")
+
+    def send_reset(self):
+        return self.send_command("RESET")
+
+    def send_format(self):
+        return self.send_command("FORMAT")
+
+    def send_wake(self):
+        return self.send_command("WAKE")
+
+    def set_volume(self, value: int):
+        return self.send_command(f"VOLUME**{value}")
+
+    def set_brightness(self, value: int):
+        return self.send_command(f"BRIGHTNESS**{value}")
+
+    def set_screentime(self, value: int):
+        return self.send_command(f"SCREENTIME**{value}")
+
+    # ── Image upload ────────────────────────────────────────────────────
+
+    def upload_image(self, jpeg_data: bytes) -> dict:
+        """
+        Upload a JPEG image to the device following the documented protocol:
+          1. Send START_RTIMAGE\\n
+          2. Send MAGIC_FRAME (4 bytes) + JPEG length (4 bytes, little-endian)
+          3. Wait for 'R' ready acknowledgement
+          4. Send JPEG binary data
+          5. Wait for 'K' (success) or 'E' (error)
+        """
+        with self._lock:
+            if not self._connected or not self._serial or not self._serial.is_open:
+                return {"success": False, "error": "Device not connected."}
+
+            try:
+                ser = self._serial
+                ser.reset_input_buffer()
+
+                # Step 1 – start command
+                ser.write((IMAGE_START_COMMAND + "\n").encode("utf-8"))
+                ser.flush()
+                logger.info("Image upload: sent START_RTIMAGE")
+
+                # The device needs time to create xTaskCreate and get ready
+                time.sleep(0.15)
+
+                # Step 2 – magic frame + length
+                length_bytes = struct.pack("<I", len(jpeg_data))
+                ser.write(IMAGE_MAGIC_FRAME + length_bytes)
+                ser.flush()
+                logger.info(f"Image upload: sent header (size={len(jpeg_data)})")
+
+                # Step 3 – wait for ready signal
+                time.sleep(0.1) # Wait slightly just in case
+                ready = ser.read(1)
+                if ready != IMAGE_READY:
+                    # Let's read a little more to see if it's a longer message like 'FAIL'
+                    time.sleep(0.1)
+                    rest = ser.read(ser.in_waiting) if ser.in_waiting else b""
+                    return {
+                        "success": False,
+                        "error": f"Device not ready (got {(ready + rest)!r}).",
+                    }
+                logger.info("Image upload: device ready")
+
+                # Step 4 – send JPEG binary data in chunks
+                chunk_size = 1024
+                offset = 0
+                while offset < len(jpeg_data):
+                    chunk = jpeg_data[offset : offset + chunk_size]
+                    ser.write(chunk)
+                    offset += len(chunk)
+                ser.flush()
+                logger.info("Image upload: binary data sent")
+
+                # Step 5 – wait for acknowledgement
+                ack = ser.read(1)
+                if ack == IMAGE_ACK_OK:
+                    logger.info("Image upload: SUCCESS")
+                    return {"success": True, "error": None}
+                elif ack == IMAGE_ACK_ERR:
+                    return {"success": False, "error": "Device reported image error."}
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Unexpected ack: {ack!r}",
+                    }
+
+            except serial.SerialException as exc:
+                logger.error(f"Image upload error: {exc}")
+                self._connected = False
+                self._notify_status()
+                return {"success": False, "error": str(exc)}
