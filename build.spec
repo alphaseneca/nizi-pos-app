@@ -8,14 +8,8 @@ import os
 
 import platform
 
-# Identify pystray backend based on OS
-pystray_backend = []
-if platform.system() == "Windows":
-    pystray_backend = ['pystray._win32']
-elif platform.system() == "Darwin":
-    pystray_backend = ['pystray._darwin']
-else: # Linux
-    pystray_backend = ['pystray._xorg', 'pystray._appindicator']
+# Identify platform details
+is_mac = platform.system() == "Darwin"
 
 base_dir = os.path.dirname(os.path.abspath(SPEC))
 
@@ -34,14 +28,14 @@ a = Analysis(
         'serial',
         'serial.tools',
         'serial.tools.list_ports',
-        'pystray',
+        'PyQt6',
         'PIL',
         'platformdirs',
-    ] + pystray_backend,
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['pystray'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     noarchive=False,
@@ -63,10 +57,23 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,           # ← no terminal window
+    console=False,           # ← no terminal window on Windows
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=None,               # add .ico path here if desired
 )
+
+# Added BUNDLE for macOS to create a proper .app and hide terminal
+if is_mac:
+    app = BUNDLE(
+        exe,
+        name='NiziPOS.app',
+        icon=None,
+        bundle_identifier='com.nizipos.backgroundapp',
+        info_plist={
+            'LSUIElement': True,  # Hide from Dock (optional, usually good for tray apps)
+            'NSHighResolutionCapable': 'True'
+        },
+    )
