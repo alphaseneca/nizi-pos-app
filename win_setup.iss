@@ -6,13 +6,18 @@
 [Setup]
 AppName=NiziPOS
 AppVersion=1.0.0
+AppPublisher=Nizi Store
+AppPublisherURL=https://nizistore.com
 DefaultDirName={localappdata}\NiziPOS
 DefaultGroupName=NiziPOS
 OutputDir=dist
 OutputBaseFilename=NiziPOS_Installer
+SetupIconFile=setup_icon.ico
+UninstallDisplayIcon={app}\NiziPOS.exe
 DisableProgramGroupPage=yes
 Compression=lzma
 SolidCompression=yes
+PrivilegesRequired=lowest
 
 ; ---------------------------------------
 [Files]
@@ -22,16 +27,15 @@ Source: "dist\NiziPOS\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 ; Include updater if any
 ; Source: "dist\NiziPOS\updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; Optional: add icon
-; Source: "assets\NiziPOS.ico"; DestDir: "{app}"; Flags: ignoreversion
+; (Icon is embedded in NiziPOS.exe)
 
 ; ---------------------------------------
 [Icons]
 ; Start Menu shortcut
-Name: "{group}\NiziPOS"; Filename: "{app}\NiziPOS.exe"; WorkingDir: "{app}"; IconFilename: "{app}\NiziPOS.ico"
+Name: "{group}\NiziPOS"; Filename: "{app}\NiziPOS.exe"; WorkingDir: "{app}"
 
 ; Desktop shortcut
-Name: "{userdesktop}\NiziPOS"; Filename: "{app}\NiziPOS.exe"; IconFilename: "{app}\NiziPOS.ico"; Tasks: desktopicon
+Name: "{userdesktop}\NiziPOS"; Filename: "{app}\NiziPOS.exe"; Tasks: desktopicon
 
 ; ---------------------------------------
 [Tasks]

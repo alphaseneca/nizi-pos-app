@@ -224,6 +224,29 @@
     </div><!-- /dashboard-grid -->
 </div><!-- /app-container -->
 
+<!-- Setup Modal -->
+<div class="modal-overlay" id="setupModal">
+    <div class="setup-card">
+        <div class="setup-header">
+            <div class="logo-icon" style="margin: 0 auto 16px;">🔑</div>
+            <h2>Setup API Access</h2>
+            <p>Please enter your API Key from the NiziPOS Tray Application.</p>
+        </div>
+        
+        <div class="form-group">
+            <label for="apiKeyInput">Your API Token</label>
+            <input type="password" id="apiKeyInput" class="form-control" placeholder="Paste token here...">
+        </div>
+        
+        <div class="setup-footer">
+            <button class="btn btn-primary" onclick="saveApiKey()">Authorize Access</button>
+            <p style="font-size:0.7rem; color:var(--text-muted); text-align:center;">
+                Open NiziPOS Tray -> API Settings -> View Token
+            </p>
+        </div>
+    </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 

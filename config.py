@@ -55,6 +55,14 @@ class Config:
     def api_key(self) -> str:
         return self._config.get("api_key", "")
 
+    def regenerate_api_key(self) -> str:
+        """Generate a new API key, save it, and return it."""
+        new_key = secrets.token_hex(32)
+        self._config["api_key"] = new_key
+        self.save()
+        logger.info("API Key regenerated.")
+        return new_key
+
     @property
     def is_windows(self) -> bool:
         return platform.system() == "Windows"

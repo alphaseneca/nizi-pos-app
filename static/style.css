@@ -106,6 +106,7 @@ body::before {
     font-weight: 700;
     background: linear-gradient(135deg, var(--text-primary), var(--accent-bright));
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -524,3 +525,80 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .card:nth-child(6) { animation-delay: 0.25s; }
 .card:nth-child(7) { animation-delay: 0.3s; }
 .card:nth-child(8) { animation-delay: 0.35s; }
+
+/* ── Setup Modal ──────────────────────────────────────────────────── */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-overlay.active {
+    display: flex;
+    animation: fade-in-overlay 0.3s ease-out;
+}
+
+@keyframes fade-in-overlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.setup-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-active);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.2);
+    animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slide-up {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.setup-header {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.setup-header h2 {
+    font-size: 1.4rem;
+    margin-bottom: 8px;
+    color: var(--accent-bright);
+}
+
+.setup-header p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.setup-footer {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.key-manage-btn {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: var(--transition);
+}
+
+.key-manage-btn:hover {
+    color: var(--accent-bright);
+}

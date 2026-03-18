@@ -10,19 +10,29 @@ let apiKey = null;
 
 // ── Authentication ───────────────────────────────────────────────────
 
-async function fetchApiKey() {
-    try {
-        const res = await fetch("/api/auth-token");
-        const data = await res.json();
-        if (data.token) {
-            apiKey = data.token;
-            console.log("API Key acquired.");
-            return true;
-        }
-    } catch (err) {
-        console.error("Failed to fetch API key:", err);
+function getStoredApiKey() {
+    return localStorage.getItem("nizipos_api_key");
+}
+
+function saveApiKey() {
+    const input = document.getElementById("apiKeyInput");
+    const key = input.value.trim();
+    if (key.length < 10) {
+        showToast("Invalid API Key format", "error");
+        return;
     }
-    return false;
+    localStorage.setItem("nizipos_api_key", key);
+    apiKey = key;
+    document.getElementById("setupModal").classList.remove("active");
+    showToast("API Key saved!", "success");
+    addLog("API Key updated manually.", "info");
+    
+    // Retry initial status
+    refreshStatus();
+}
+
+function showSetupModal() {
+    document.getElementById("setupModal").classList.add("active");
 }
 
 // ── SocketIO Connection ──────────────────────────────────────────────
@@ -70,9 +80,13 @@ function updateStatusUI(connected, port) {
 // ── API Calls ────────────────────────────────────────────────────────
 
 async function api(method, url, body = null) {
+    if (!apiKey) {
+        apiKey = getStoredApiKey();
+    }
+    
     if (!apiKey && url !== "/api/auth-token") {
-        const success = await fetchApiKey();
-        if (!success) return { success: false, error: "Authentication failed" };
+        showSetupModal();
+        return { success: false, error: "API Key required" };
     }
 
     const opts = { 
@@ -89,6 +103,12 @@ async function api(method, url, body = null) {
     }
     try {
         const res = await fetch(url, opts);
+        if (res.status === 401) {
+            apiKey = null;
+            localStorage.removeItem("nizipos_api_key");
+            showSetupModal();
+            return { success: false, error: "Unauthorized" };
+        }
         return await res.json();
     } catch (err) {
         return { success: false, error: err.message };
@@ -294,9 +314,16 @@ function showToast(message, type = "info", duration = 3000) {
     }, duration);
 }
 
-// ── Initial status fetch ─────────────────────────────────────────────
+async function refreshStatus() {
+    const res = await api("GET", "/api/status");
+    if (res && res.success !== false) updateStatusUI(res.connected, res.port);
+}
 
 (async () => {
-    const res = await api("GET", "/api/status");
-    if (res) updateStatusUI(res.connected, res.port);
+    apiKey = getStoredApiKey();
+    if (!apiKey) {
+        showSetupModal();
+    } else {
+        refreshStatus();
+    }
 })();

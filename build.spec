@@ -20,6 +20,7 @@ a = Analysis(
     datas=[
         (os.path.join(base_dir, 'static'), 'static'),
         (os.path.join(base_dir, 'assets'), 'assets'),
+        (os.path.join(base_dir, 'icon.ico'), '.'),
     ],
     hiddenimports=[
         'flask',
@@ -64,7 +65,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon=os.path.join(base_dir, 'icon.ico'),
 )
 
 coll = COLLECT(
@@ -83,7 +84,7 @@ if is_mac:
     app = BUNDLE(
         coll,                # Use collective binaries
         name='NiziPOS.app',
-        icon=None,
+        icon=os.path.join(base_dir, 'icon.ico'),
         bundle_identifier='com.nizistore.nizipos',
         info_plist={
             'LSUIElement': True,

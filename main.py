@@ -72,8 +72,14 @@ def main():
 
     # Create the PyQt6 Application
     from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtGui import QIcon
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    # Set global application icon
+    icon_path = os.path.join(BASE_DIR, "icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     # Create the floating PyQt UI
     from ui_app import TrayFlyout

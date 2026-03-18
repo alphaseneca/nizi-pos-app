@@ -52,13 +52,6 @@ def require_api_key():
             logger.warning(f"Unauthorized API request to {request.path} from {request.remote_addr}")
             return jsonify({"success": False, "error": "Unauthorized"}), 401
 
-@app.route("/api/auth-token")
-def api_auth_token():
-    """Return the API key to the frontend. Only works if requester is on localhost."""
-    if request.remote_addr in ("127.0.0.1", "localhost", "::1"):
-        return jsonify({"token": config.api_key})
-    return jsonify({"success": False, "error": "Forbidden"}), 403
-
 
 def _on_device_status(connected: bool, port: str | None):
     """Push connection status to all connected browser clients."""
@@ -73,6 +66,11 @@ device.set_status_callback(_on_device_status)
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(".", "icon.ico")
 
 
 # ── REST API ─────────────────────────────────────────────────────────────

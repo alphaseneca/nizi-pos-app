@@ -4,7 +4,13 @@ The NiziPOS background service exposes a REST API on `http://127.0.0.1:5123` for
 
 ## Authentication
 
-All `/api/*` requests (except `/api/auth-token`) require an API Key supplied in the `X-API-Key` header.
+All `/api/*` requests require an API Key supplied in the `X-API-Key` header.
+
+### How to get your API Key
+1. Open the **NiziPOS Tray Application**.
+2. Click the **API Settings** button at the bottom.
+3. Enter the verification code (`adminhere`).
+4. Copy the API Token to your clipboard.
 
 | Header | Description |
 | :--- | :--- |

@@ -6,6 +6,7 @@ Icon color changes based on device connection state.
 
 import logging
 import webbrowser
+import os
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import QObject
@@ -77,7 +78,35 @@ class TrayApp(QObject):
 
     def _update_icon(self):
         """Update the tray icon image to reflect connection state."""
-        self._tray_icon.setIcon(_create_qicon(self._connected))
+        icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+        
+        if os.path.exists(icon_path):
+            try:
+                img = Image.open(icon_path)
+                if not self._connected:
+                    # Convert to grayscale but preserve alpha channel
+                    if img.mode != "RGBA":
+                        img = img.convert("RGBA")
+                    # Split into R, G, B, A
+                    r, g, b, a = img.split()
+                    # Convert RGB part to grayscale
+                    gray = img.convert("L")
+                    # Merge back: use the same gray for R, G, B channels, keep original A
+                    img = Image.merge("RGBA", (gray, gray, gray, a))
+                
+                # Convert PIL Image to QIcon via bytes
+                byte_array = io.BytesIO()
+                img.save(byte_array, format="PNG")
+                from PyQt6.QtGui import QPixmap
+                pixmap = QPixmap()
+                pixmap.loadFromData(byte_array.getvalue())
+                self._tray_icon.setIcon(QIcon(pixmap))
+            except Exception as e:
+                logger.error(f"Failed to process tray icon: {e}")
+                self._tray_icon.setIcon(_create_qicon(self._connected))
+        else:
+            self._tray_icon.setIcon(_create_qicon(self._connected))
+            
         tip = "NiziPOS — Connected" if self._connected else "NiziPOS — Disconnected"
         self._tray_icon.setToolTip(tip)
 
