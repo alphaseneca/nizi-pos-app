@@ -70,6 +70,38 @@ class TestHardening(unittest.TestCase):
         res = requests.post(f"{BASE_URL}/api/upload-image", files=files, headers=headers)
         self.assertEqual(res.status_code, 400)
 
+    def test_socketio_auth(self):
+        """SocketIO should require correct token in auth handshake."""
+        import socketio
+        sio = socketio.Client()
+        
+        # Test without token
+        try:
+            sio.connect(BASE_URL)
+            connected_no_auth = sio.connected
+            sio.disconnect()
+        except:
+            connected_no_auth = False
+        self.assertFalse(connected_no_auth, "Should not connect without auth")
+        
+        # Test with wrong token
+        try:
+            sio.connect(BASE_URL, auth={"token": "wrong-token"})
+            connected_wrong_auth = sio.connected
+            sio.disconnect()
+        except:
+            connected_wrong_auth = False
+        self.assertFalse(connected_wrong_auth, "Should not connect with wrong token")
+
+        # Test with correct token
+        try:
+            sio.connect(BASE_URL, auth={"token": self.api_key})
+            connected_correct_auth = sio.connected
+            sio.disconnect()
+        except:
+            connected_correct_auth = False
+        self.assertTrue(connected_correct_auth, "Should connect with correct token")
+
 if __name__ == "__main__":
     print(f"Testing NiziPOS at {BASE_URL}...")
     unittest.main()

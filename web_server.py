@@ -207,7 +207,12 @@ def api_settings():
 
 
 @socketio.on("connect")
-def ws_connect():
+def ws_connect(auth=None):
+    """Verify API token on SocketIO connection."""
+    if not auth or auth.get("token") != config.api_key:
+        logger.warning(f"Unauthorized SocketIO connection attempt from {request.remote_addr}")
+        return False  # Disconnects the client
+    
     socketio.emit(
         "device_status",
         {"connected": device.connected, "port": device.port},

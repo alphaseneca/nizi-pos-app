@@ -4,7 +4,9 @@
 
 // ── SocketIO Connection ──────────────────────────────────────────────
 
-const socket = io();
+const socket = io({ 
+    autoConnect: false 
+});
 let selectedImageFile = null;
 let apiKey = null;
 
@@ -24,6 +26,10 @@ function saveApiKey() {
     localStorage.setItem("nizipos_api_key", key);
     apiKey = key;
     document.getElementById("setupModal").classList.remove("active");
+    
+    // Connect SocketIO with the new key
+    connectSocket();
+    
     showToast("API Key saved!", "success");
     addLog("API Key updated manually.", "info");
     
@@ -33,6 +39,12 @@ function saveApiKey() {
 
 function showSetupModal() {
     document.getElementById("setupModal").classList.add("active");
+}
+
+function connectSocket() {
+    if (!apiKey) return;
+    socket.auth = { token: apiKey };
+    socket.connect();
 }
 
 
@@ -325,6 +337,7 @@ async function refreshStatus() {
     if (!apiKey) {
         showSetupModal();
     } else {
+        connectSocket();
         refreshStatus();
     }
 })();

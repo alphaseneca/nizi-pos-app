@@ -101,6 +101,21 @@ The background service uses Socket.IO for real-time status updates and command f
 
 **Connection URL:** `ws://127.0.0.1:9121` or `http://127.0.0.1:9121`
 
+### Authentication
+
+Socket.IO connections require a valid API token provided in the `auth` object during the initial handshake.
+
+**Example (Client-side):**
+```javascript
+const socket = io("http://127.0.0.1:9121", {
+  auth: {
+    token: "your-fixed-secret-token"
+  }
+});
+```
+
+Connections missing the token or using an invalid token will be automatically rejected by the server.
+
 ### Client-to-Server Events
 
 #### `send_command`
