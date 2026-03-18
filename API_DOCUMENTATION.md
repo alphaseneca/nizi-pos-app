@@ -95,6 +95,51 @@ Uploads and displays a JPEG image.
 
 ---
 
+## WebSocket (Socket.IO) Communication
+
+The background service uses Socket.IO for real-time status updates and command feedback.
+
+**Connection URL:** `ws://127.0.0.1:5123` or `http://127.0.0.1:5123`
+
+### Client-to-Server Events
+
+#### `send_command`
+Sends a raw command to the device (alternative to the POST `/api/command` endpoint).
+
+**Payload:**
+```json
+{
+  "command": "IDLE"
+}
+```
+
+### Server-to-Client Events
+
+#### `device_status`
+Emitted immediately upon connection and whenever the device connection state changes.
+
+**Payload:**
+```json
+{
+  "connected": true,
+  "port": "COM15"
+}
+```
+
+#### `command_result`
+Emitted after a command sent via `send_command` is processed.
+
+**Payload:**
+```json
+{
+  "command": "IDLE",
+  "success": true,
+  "error": null
+}
+```
+
+---
+
 ## Error Handling
 
 | Status Code | Description |

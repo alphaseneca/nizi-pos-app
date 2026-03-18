@@ -52,7 +52,7 @@ exe = EXE(
     a.scripts,
     [],                      # Move binaries/zipfiles/datas to COLLECT for non-onefile macOS bundle
     exclude_binaries=True,   # Required for BUNDLE on macOS sometimes
-    name='NiziposExe',       # Internal name
+    name='NiziPOS',       # Internal name
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -84,7 +84,7 @@ if is_mac:
         coll,                # Use collective binaries
         name='NiziPOS.app',
         icon=None,
-        bundle_identifier='com.nizipos.backgroundapp',
+        bundle_identifier='com.nizistore.nizipos',
         info_plist={
             'LSUIElement': True,
             'NSHighResolutionCapable': 'True'
