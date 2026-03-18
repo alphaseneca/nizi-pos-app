@@ -300,110 +300,8 @@ QDialog {
 """
 
 
-class VerificationDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Security Verification")
-        self.setStyleSheet(STYLESHEET)
-        
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-        
-        lbl = QLabel("Enter Verification Code:")
-        lbl.setObjectName("sectionTitle")
-        layout.addWidget(lbl)
-        
-        self.code_input = QLineEdit()
-        self.code_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.code_input.setPlaceholderText("Code...")
-        self.code_input.returnPressed.connect(self.verify)
-        layout.addWidget(self.code_input)
-        
-        btn_box = QHBoxLayout()
-        self.btn_verify = QPushButton("Verify")
-        self.btn_verify.setObjectName("primaryBtn")
-        self.btn_verify.setDefault(True)
-        self.btn_verify.clicked.connect(self.verify)
-        
-        self.btn_cancel = QPushButton("Cancel")
-        self.btn_cancel.setObjectName("secondaryBtn")
-        self.btn_cancel.clicked.connect(self.reject)
-        
-        btn_box.addWidget(self.btn_cancel)
-        btn_box.addWidget(self.btn_verify)
-        layout.addLayout(btn_box)
-
-    def verify(self):
-        if self.code_input.text() == "adminhere":
-            self.accept()
-        else:
-            QMessageBox.warning(self, "Invalid Code", "The verification code is incorrect.")
-            self.code_input.clear()
 
 
-class TokenManagerDialog(QDialog):
-    def __init__(self, config, parent=None):
-        super().__init__(parent)
-        self.config = config
-        self.setWindowTitle("API Token Management")
-        self.setFixedWidth(400)
-        self.setStyleSheet(STYLESHEET)
-        
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
-        
-        lbl = QLabel("Your Secure API Token")
-        lbl.setObjectName("headerTitle")
-        layout.addWidget(lbl)
-        
-        self.token_display = QLineEdit(self.config.api_key)
-        self.token_display.setReadOnly(True)
-        self.token_display.setStyleSheet("font-family: monospace; font-size: 9pt;")
-        layout.addWidget(self.token_display)
-        
-        btn_row = QHBoxLayout()
-        self.btn_copy = QPushButton("Copy Token")
-        self.btn_copy.setObjectName("secondaryBtn")
-        self.btn_copy.clicked.connect(self.copy_token)
-        
-        self.btn_regen = QPushButton("Regenerate")
-        self.btn_regen.setObjectName("warningBtn")
-        self.btn_regen.clicked.connect(self.regenerate_token)
-        
-        btn_row.addWidget(self.btn_copy)
-        btn_row.addWidget(self.btn_regen)
-        layout.addLayout(btn_row)
-        
-        self.btn_close = QPushButton("Close")
-        self.btn_close.setObjectName("primaryBtn")
-        self.btn_close.clicked.connect(self.accept)
-        layout.addWidget(self.btn_close)
-
-    def copy_token(self):
-        clipboard = QGuiApplication.clipboard()
-        clipboard.setText(self.config.api_key)
-        QMessageBox.information(self, "Copied", "Token copied to clipboard.")
-
-    def regenerate_token(self):
-        reply = QMessageBox.question(
-            self, "Confirm Regeneration",
-            "This will invalidate your current token. Are you sure?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            new_key = self.config.regenerate_api_key()
-            self.token_display.setText(new_key)
-            QMessageBox.information(self, "Regenerated", "New token generated. Please update your integration.")
 
 
 class TrayFlyout(QWidget):
@@ -584,11 +482,6 @@ class TrayFlyout(QWidget):
         root.addStretch()
         
         footer_layout = QHBoxLayout()
-        
-        self.btn_api_settings = QPushButton("API Settings")
-        self.btn_api_settings.setObjectName("secondaryBtn")
-        self.btn_api_settings.clicked.connect(self._manage_api_token)
-        footer_layout.addWidget(self.btn_api_settings)
         
         footer_layout.addStretch()
         
@@ -916,14 +809,6 @@ class TrayFlyout(QWidget):
                 self._rescan_ports()
 
         self.adjustSize()
-
-    def _manage_api_token(self):
-        """Verify user and show token management dialog."""
-        v_dlg = VerificationDialog(self)
-        if v_dlg.exec() == QDialog.DialogCode.Accepted:
-            from config import config
-            t_dlg = TokenManagerDialog(config, self)
-            t_dlg.exec()
 
     def _manual_connect(self):
         if self.device.connected:

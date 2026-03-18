@@ -2,15 +2,9 @@
 
 The NiziPOS background service exposes a REST API on `http://127.0.0.1:9121` for controlling the connected UART display device.
 
-## Authentication
+## Authentication is handled via a fixed API key. This key is provided to authorized users via email and must be included in the `X-API-Key` header for all requests.
 
-All `/api/*` requests require an API Key supplied in the `X-API-Key` header.
-
-### How to get your API Key
-1. Open the **NiziPOS Tray Application**.
-2. Click the **API Settings** button at the bottom.
-3. Enter the verification code (`adminhere`).
-4. Copy the API Token to your clipboard.
+**Fixed API Token:** `nizipos-fixed-secret-token` (Placeholder — refer to your distribution email)
 
 | Header | Description |
 | :--- | :--- |

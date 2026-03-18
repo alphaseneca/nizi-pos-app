@@ -21,14 +21,8 @@ BASE_URL = "http://127.0.0.1:9121"
 class TestHardening(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # We need the API key. In a real test we'd import config
-        # but let's try to get it from the local auth-token endpoint first
-        try:
-            res = requests.get(f"{BASE_URL}/api/auth-token")
-            cls.api_key = res.json().get("token")
-        except:
-            cls.api_key = None
-            print("Warning: Could not fetch API key. Interface tests will fail.")
+        # The API key is now hardcoded in the app.
+        cls.api_key = "Z8uVovI2eftp65dO9JoxEstKcWggSlTAza4erAQhELmSC761rVtp5IIzaXOxWNw0ycPCICYCnJBCVPCzvdT8fbJvWIWm69fhHveZesIiDEIeI0BkdSspMPimWYNWs25D"
 
     def test_unauthorized_access(self):
         """API should return 401 without key."""

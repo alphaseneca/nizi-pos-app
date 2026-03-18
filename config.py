@@ -38,10 +38,8 @@ class Config:
         else:
             self._config = {}
 
-        # Ensure API key exists
-        if "api_key" not in self._config:
-            self._config["api_key"] = secrets.token_hex(32)
-            self.save()
+        # Ensure config exists for other settings if any (none yet but good to keep)
+        pass
 
     def save(self):
         """Save configuration to disk."""
@@ -53,15 +51,9 @@ class Config:
 
     @property
     def api_key(self) -> str:
-        return self._config.get("api_key", "")
+        # Fixed secret token hardcoded in the app as requested.
+        return "Z8uVovI2eftp65dO9JoxEstKcWggSlTAza4erAQhELmSC761rVtp5IIzaXOxWNw0ycPCICYCnJBCVPCzvdT8fbJvWIWm69fhHveZesIiDEIeI0BkdSspMPimWYNWs25D"
 
-    def regenerate_api_key(self) -> str:
-        """Generate a new API key, save it, and return it."""
-        new_key = secrets.token_hex(32)
-        self._config["api_key"] = new_key
-        self.save()
-        logger.info("API Key regenerated.")
-        return new_key
 
     @property
     def is_windows(self) -> bool:

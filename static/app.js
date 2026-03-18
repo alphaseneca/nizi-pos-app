@@ -35,6 +35,7 @@ function showSetupModal() {
     document.getElementById("setupModal").classList.add("active");
 }
 
+
 // ── SocketIO Connection ──────────────────────────────────────────────
 
 socket.on("connect", () => {
@@ -84,16 +85,16 @@ async function api(method, url, body = null) {
         apiKey = getStoredApiKey();
     }
     
-    if (!apiKey && url !== "/api/auth-token") {
+    if (!apiKey) {
         showSetupModal();
         return { success: false, error: "API Key required" };
     }
 
-    const opts = { 
-        method, 
+    const opts = {
+        method,
         headers: {
             "X-API-Key": apiKey
-        } 
+        }
     };
     if (body && !(body instanceof FormData)) {
         opts.headers["Content-Type"] = "application/json";

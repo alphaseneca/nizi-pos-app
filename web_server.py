@@ -42,8 +42,8 @@ device = DeviceManager()
 
 @app.before_request
 def require_api_key():
-    """Verify X-API-Key header for all /api/ requests, except auth-token."""
-    if request.path.startswith("/api/") and request.path != "/api/auth-token":
+    """Verify X-API-Key header for all /api/ requests."""
+    if request.path.startswith("/api/"):
         # Check header
         api_key = request.headers.get("X-API-Key")
         if api_key != config.api_key:

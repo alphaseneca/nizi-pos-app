@@ -5,7 +5,7 @@ NiziPOS is a background service that allows web applications and local systems t
 ## Getting Started
 
 ### 1. Launching the App
-Run the `NiziPOS` executable. On first launch, it will generate a secure API key stored in your user configuration folder.
+Run the `NiziPOS` executable. The app uses a fixed secret token for secure API access.
 
 ### 2. System Tray
 Look for the NiziPOS icon in your system tray:
@@ -51,4 +51,4 @@ NiziPOS runs a local web server on `http://127.0.0.1:9121`.
 
 ## Security
 - NiziPOS is bound to **localhost only**. It cannot be accessed by other computers on your network.
-- Every API request requires a valid **API Key** generated locally.
+- Every API request requires the valid **fixed API Key** provided to you.
