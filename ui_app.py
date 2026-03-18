@@ -411,7 +411,7 @@ class TrayFlyout(QWidget):
     upload_status_updated = pyqtSignal(str, str, bool)
     toggle_visibility = pyqtSignal()
 
-    def __init__(self, device_manager, web_port=5123, on_quit=None):
+    def __init__(self, device_manager, web_port=9121, on_quit=None):
         super().__init__()
         self.device = device_manager
         self.web_port = web_port

@@ -82,7 +82,7 @@ class Config:
 
     @property
     def server_port(self) -> int:
-        return 5123
+        return 9121
 
 # Global singleton
 config = Config()

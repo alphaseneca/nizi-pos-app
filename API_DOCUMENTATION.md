@@ -1,6 +1,6 @@
 # NiziPOS API Documentation
 
-The NiziPOS background service exposes a REST API on `http://127.0.0.1:5123` for controlling the connected UART display device.
+The NiziPOS background service exposes a REST API on `http://127.0.0.1:9121` for controlling the connected UART display device.
 
 ## Authentication
 
@@ -105,7 +105,7 @@ Uploads and displays a JPEG image.
 
 The background service uses Socket.IO for real-time status updates and command feedback.
 
-**Connection URL:** `ws://127.0.0.1:5123` or `http://127.0.0.1:5123`
+**Connection URL:** `ws://127.0.0.1:9121` or `http://127.0.0.1:9121`
 
 ### Client-to-Server Events
 

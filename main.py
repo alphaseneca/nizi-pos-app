@@ -2,11 +2,11 @@
 NiziPOS Background Application — Entry Point
 
 Starts:
-  1. Flask web server (daemon thread) on port 5123
+  1. Flask web server (daemon thread) on port 9121
   2. System tray icon (main thread)
 
 The tray icon provides connect/disconnect/open dashboard/quit controls.
-Visit http://localhost:5123 for the full web dashboard.
+Visit http://localhost:9121 for the full web dashboard.
 """
 
 import logging
@@ -83,7 +83,7 @@ def main():
 
     # Create the floating PyQt UI
     from ui_app import TrayFlyout
-    ui = TrayFlyout(device_manager=device, web_port=5123, on_quit=on_quit)
+    ui = TrayFlyout(device_manager=device, web_port=config.server_port, on_quit=on_quit)
 
     # Run system tray on the main thread
     tray = TrayApp(device_manager=device, ui_app=ui, on_quit=on_quit)

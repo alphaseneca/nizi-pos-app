@@ -15,7 +15,7 @@ import io
 
 logger = logging.getLogger(__name__)
 
-WEB_PORT = 5123
+WEB_PORT = 9121
 ICON_SIZE = 64
 
 

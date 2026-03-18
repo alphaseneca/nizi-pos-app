@@ -42,9 +42,9 @@ You can enter a specific COM port (e.g., `COM3` on Windows or `/dev/ttyUSB0` on 
 
 ## Remote Access & Integration
 
-NiziPOS runs a local web server on `http://127.0.0.1:5123`.
+NiziPOS runs a local web server on `http://127.0.0.1:9121`.
 
-- **Web Dashboard**: Open your browser to `http://localhost:5123` to access the full control panel.
+- **Web Dashboard**: Open your browser to `http://localhost:9121` to access the full control panel.
 - **API**: Third-party POS systems can send commands to the device using the REST API. See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for details.
 
 ---

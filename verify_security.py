@@ -16,7 +16,7 @@ import io
 # We assume the server is running or we start it
 # For automated tests, we'll try to reach it.
 
-BASE_URL = "http://127.0.0.1:5123"
+BASE_URL = "http://127.0.0.1:9121"
 
 class TestHardening(unittest.TestCase):
     @classmethod
