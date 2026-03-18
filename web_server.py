@@ -29,10 +29,7 @@ app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB limit
 # Use 'threading' async mode which is the most compatible with PyInstaller standard builds
 socketio = SocketIO(
     app, 
-    cors_allowed_origins=[
-        f"http://127.0.0.1:{config.server_port}",
-        f"http://localhost:{config.server_port}"
-    ], 
+    cors_allowed_origins="*", 
     async_mode="threading"
 )
 
@@ -43,14 +40,30 @@ device = DeviceManager()
 @app.before_request
 def require_api_key():
     """Verify X-API-Key header for all /api/ requests."""
+    # Skip auth for CORS preflight (OPTIONS) requests
+    if request.method == "OPTIONS":
+        return
+
     if request.path.startswith("/api/"):
         # Check header
         api_key = request.headers.get("X-API-Key")
         if api_key != config.api_key:
-            # Also allow access if the request comes from the same server (simple check)
-            # but usually frontend will send the header.
             logger.warning(f"Unauthorized API request to {request.path} from {request.remote_addr}")
             return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Add CORS headers to all responses to allow interaction with any origin."""
+    origin = request.headers.get('Origin')
+    if origin:
+        # We allow any origin to connect, as long as it provides the correct API key.
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+    return response
 
 
 def _on_device_status(connected: bool, port: str | None):
