@@ -168,7 +168,8 @@ class DeviceManager:
             ser.flush()
 
             response = ser.readline().decode("utf-8", errors="ignore").strip()
-            logger.info(f"  ← {response!r}")
+            # Use ASCII arrows to avoid mojibake in some Windows consoles/log viewers.
+            logger.info(f"  <- {response!r}")
 
             if DEVICE_ID_PATTERN.search(response):
                 ser.close()

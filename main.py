@@ -86,7 +86,7 @@ def main():
     # Start web server in a background thread
     try:
         server_thread = start_server_thread()
-        logger.info(f"Web server thread started → http://{config.server_host}:{config.server_port}")
+        logger.info(f"Web server thread started -> http://{config.server_host}:{config.server_port}")
     except Exception as e:
         logger.error(f"Failed to start web server: {e}")
         # On macOS bundle failure, we might want to alert the user or just keep the tray running

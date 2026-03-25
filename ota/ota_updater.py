@@ -182,7 +182,7 @@ def main():
             pass
 
         # Restart new version.
-        logger.info("Restarting updated app…")
+        logger.info("Restarting updated app...")
         subprocess.Popen([main_exe_path], cwd=target_dir)
         return 0
     except Exception as e:

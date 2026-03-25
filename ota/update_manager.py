@@ -14,6 +14,9 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+class OTALocalCancelled(Exception):
+    """Raised when the user cancels an OTA download in the progress dialog."""
+
 
 @dataclass(frozen=True)
 class UpdateInfo:
@@ -178,18 +181,40 @@ class UpdateManager:
             self._write_log(f"[download_text] failed: {e}")
             return None
 
-    def _download_to_file(self, url: str, dest_path: Path):
+    def _download_to_file(self, url: str, dest_path: Path, *, cancel_check=None, progress_dialog=None):
         headers = {"User-Agent": "NiziPOS-OTA"}
         # Use a larger read timeout for big ZIP downloads.
         timeout = (10, max(60, int(self.timeout_s) * 6))
+        written = 0
+        total = None
         with requests.get(url, headers=headers, stream=True, timeout=timeout) as r:
             r.raise_for_status()
+            try:
+                cl = r.headers.get("Content-Length")
+                if cl:
+                    total = int(cl)
+            except Exception:
+                total = None
+
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             with open(dest_path, "wb") as f:
+                if progress_dialog is not None and total:
+                    progress_dialog.setRange(0, total)
+                    progress_dialog.setValue(0)
+                elif progress_dialog is not None:
+                    # Indeterminate progress
+                    progress_dialog.setRange(0, 0)
+
                 for chunk in r.iter_content(chunk_size=1024 * 256):
                     if not chunk:
                         continue
+                    if cancel_check and cancel_check():
+                        raise OTALocalCancelled()
                     f.write(chunk)
+                    written += len(chunk)
+
+                    if progress_dialog is not None and total:
+                        progress_dialog.setValue(min(written, total))
 
     def _sha256_file(self, path: Path) -> str:
         h = hashlib.sha256()
@@ -251,7 +276,7 @@ class UpdateManager:
 
         if not is_version_newer(latest_version, self.current_version):
             self._write_log(
-                f"[get_update_info] latest not newer latest_version={latest_version!r} current_version={self.current_version!r}"
+                f"[get_update_info] latest_version={latest_version!r} current_version={self.current_version!r}"
             )
             return None
 
@@ -262,8 +287,14 @@ class UpdateManager:
         Returns True if the updater was launched (caller should stop starting the app).
         Returns False if no update / user declined / download failed.
         """
+        # Log resolved repo so we don't get confused by empty user input.
+        raw_repo_input = self.github_repo
+        resolved_repo = raw_repo_input or self._load_repo_from_embedded_source() or ""
+        resolved_repo = self._normalize_github_repo(resolved_repo) or ""
+
         self._write_log(
-            f"[startup_check] current_version={self.current_version!r} github_repo_input={self.github_repo!r}"
+            f"[startup_check] current_version={self.current_version!r} "
+            f"github_repo={resolved_repo!r}"
         )
 
         try:
@@ -275,32 +306,119 @@ class UpdateManager:
 
         info = self._get_update_info()
         if not info:
-            self._write_log("[startup_check] no update available (or update info missing)")
+            self._write_log("[startup_check] no update available")
             return False
 
-        # Prompt-first UX.
-        msg = (
-            f"An update is available.\n\n"
+        # Prompt-first UX (styled).
+        # Keep it simple/robust: use plain text (no RichText/HTML), and only style the buttons.
+        msg_plain = (
+            "An update is available.\n\n"
             f"Current: {self.current_version}\n"
             f"Latest:  {info.latest_version}\n\n"
-            f"Download and update now?"
+            "Download and update now?"
         )
 
-        reply = QMessageBox.question(
-            parent_widget,
-            "NiziPOS Update",
-            msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        mb = QMessageBox(parent_widget)
+        mb.setWindowTitle("NiziPOS Update")
+        mb.setIcon(QMessageBox.Icon.Information)
+        mb.setText(msg_plain)
+        mb.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        mb.setDefaultButton(QMessageBox.StandardButton.Yes)
+        mb.setEscapeButton(QMessageBox.StandardButton.No)
+
+        # Style: keep it light-touch (plain text + button styling) so the dialog stays readable.
+        mb.setStyleSheet(
+            """
+QMessageBox {
+  background-color: #111827;
+  color: #e5e7eb;
+}
+QLabel {
+  color: #e5e7eb;
+  font-size: 10.5pt;
+}
+QPushButton {
+  border-radius: 9px;
+  padding: 6px 18px;
+  font-weight: 700;
+  min-width: 90px;
+}
+"""
         )
 
+        # Apply per-button colors (based on button text).
+        try:
+            for b in mb.buttons():
+                if (b.text() or "").strip().lower() == "yes":
+                    b.setStyleSheet("background-color:#4f46e5; color:#ffffff; border:0px;")
+                elif (b.text() or "").strip().lower() == "no":
+                    b.setStyleSheet("background-color:#111827; color:#ffffff; border:1px solid #334155;")
+        except Exception:
+            pass
+
+        reply = mb.exec()
         if reply != QMessageBox.StandardButton.Yes:
             return False
 
-        progress = QProgressDialog("Downloading update…", None, 0, 0, parent_widget)
+        progress = QProgressDialog("Preparing update...", "Cancel", 0, 0, parent_widget)
         progress.setWindowTitle("NiziPOS Update")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
+        progress.setAutoClose(True)
+        progress.setAutoReset(False)
+        progress.setStyleSheet(
+            """
+QProgressDialog {
+  background-color: #111827;
+  color: #ffffff;
+}
+QLabel {
+  color: #e5e7eb;
+  font-size: 10.5pt;
+}
+QPushButton {
+  border-radius: 9px;
+  padding: 6px 16px;
+  font-weight: 700;
+  border: 1px solid #334155;
+  color: #ffffff;
+  background-color: #0f172a;
+}
+QProgressBar {
+  height: 10px;
+  border-radius: 5px;
+  background-color: #0f172a;
+}
+QProgressBar::chunk {
+  border-radius: 5px;
+  background-color: #4f46e5;
+}
+"""
+        )
         progress.show()
+
+        cancelled = {"value": False}
+
+        def _cancel_check() -> bool:
+            return cancelled["value"] or progress.wasCanceled()
+
+        def _on_cancel():
+            cancelled["value"] = True
+            progress.setLabelText("Cancelling...")
+
+        try:
+            progress.canceled.connect(_on_cancel)
+        except Exception:
+            pass
+
+        # If user presses the window X / closes the dialog, treat it as cancellation.
+        try:
+            def _on_finished():
+                cancelled["value"] = progress.wasCanceled()
+
+            progress.finished.connect(_on_finished)
+        except Exception:
+            pass
 
         try:
             tmp_dir = Path(tempfile.gettempdir()) / "nizipos_ota"
@@ -311,11 +429,20 @@ class UpdateManager:
                 except Exception:
                     pass
 
+            progress.setLabelText("Downloading update...")
+            progress.setRange(0, 0)
             self._write_log(f"[download] url={info.zip_url}")
             QApplication.processEvents()
-            self._download_to_file(info.zip_url, zip_path)
+            self._download_to_file(info.zip_url, zip_path, cancel_check=_cancel_check, progress_dialog=progress)
 
-            self._write_log("[download] verifying sha256…")
+            if progress.wasCanceled():
+                self._write_log("[download] cancelled by user")
+                return False
+
+            progress.setLabelText("Verifying download...")
+            QApplication.processEvents()
+
+            self._write_log("[download] verifying sha256...")
             QApplication.processEvents()
             actual = self._sha256_file(zip_path)
             if actual.lower() != info.sha256.lower():
@@ -357,6 +484,9 @@ class UpdateManager:
                 cwd=str(installed_dir),
             )
             return True
+        except OTALocalCancelled:
+            self._write_log("[download] cancelled by user (exception)")
+            return False
         except Exception as e:
             self._write_log(f"[prompt_and_update] failed: {e}")
             QMessageBox.critical(parent_widget, "NiziPOS Update Failed", str(e))
