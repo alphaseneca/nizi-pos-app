@@ -76,5 +76,22 @@ class Config:
     def server_port(self) -> int:
         return 9121
 
+    @property
+    def github_repo(self) -> str:
+        """
+        GitHub repo in the form: "owner/name" used for OTA updates.
+
+        You can set it in two ways:
+        1) Environment variable: `NIZIPOS_GITHUB_REPO=owner/name`
+        2) In config file: `{ "github_repo": "owner/name" }`
+
+        If empty, OTA updates are disabled.
+        """
+        return (
+            os.environ.get("NIZIPOS_GITHUB_REPO")
+            or self._config.get("github_repo")
+            or ""
+        )
+
 # Global singleton
 config = Config()

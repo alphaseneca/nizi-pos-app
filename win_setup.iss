@@ -3,9 +3,29 @@
 ; Requires Inno Setup Compiler
 ; ---------------------------------------
 
+; Build-time version extraction from `version.json`
+#define VersionFileHandle FileOpen("version.json")
+#if VersionFileHandle
+  #define VersionJsonLine FileRead(VersionFileHandle)
+  #expr FileClose(VersionFileHandle)
+
+  ; Extract version value from minified JSON: {"version":"1.2.3"}
+  ; We assume the file line contains the substring: "version":"<value>"
+  #define KeyPos Pos('"version":"', VersionJsonLine)
+  #if KeyPos
+    #define VersionValueStart KeyPos + 11
+    #define VersionValueEnd Pos('"', Copy(VersionJsonLine, VersionValueStart))
+    #define AppVer Copy(Copy(VersionJsonLine, VersionValueStart), 1, VersionValueEnd - 1)
+  #else
+    #define AppVer "1.0.0"
+  #endif
+#else
+  #define AppVer "1.0.0"
+#endif
+
 [Setup]
 AppName=NiziPOS
-AppVersion=1.0.0
+AppVersion={#AppVer}
 AppPublisher=Nizi Store
 AppPublisherURL=https://nizistore.com
 DefaultDirName={localappdata}\NiziPOS
@@ -25,7 +45,7 @@ PrivilegesRequired=lowest
 Source: "dist\NiziPOS\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 ; Include updater if any
-; Source: "dist\NiziPOS\updater.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\NiziPOS\ota_updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; (Icon is embedded in NiziPOS.exe)
 

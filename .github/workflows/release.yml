@@ -1,0 +1,105 @@
+name: Release (Build + OTA assets)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+        shell: pwsh
+
+      - name: Prepare build metadata (version + github repo)
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v',''
+          $repo = $env:GITHUB_REPOSITORY
+
+          # Update OTA embedded source so the app knows which repo to query.
+          $srcPath = "ota_source.json"
+          Set-Content -Path $srcPath -Value (@{ github_repo = $repo } | ConvertTo-Json -Compress) -Encoding UTF8
+
+          # Update the single version source-of-truth for correct OTA comparisons and app display.
+          Set-Content -Path "version.json" -Value (@{ version = $version } | ConvertTo-Json -Compress) -Encoding UTF8
+
+      - name: Build PyInstaller (NiziPOS + ota_updater)
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
+          pyinstaller build.spec
+
+      - name: Create OTA ZIP (exclude ota_updater.exe)
+        id: ota_zip
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v',''
+          $zipName = "NiziPOS-win-ota-$version.zip"
+
+          $staging = Join-Path $env:RUNNER_TEMP "nizipos_ota_staging"
+          Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+
+          Copy-Item -Path "dist\NiziPOS\*" -Destination $staging -Recurse -Force
+          Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $staging "ota_updater.exe")
+
+          # Zip contents at the zip root (NiziPOS.exe, static/, assets/, ...)
+          Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipName -Force
+
+          $zipPath = (Resolve-Path $zipName).Path
+          $sha = (Get-FileHash -Algorithm SHA256 $zipPath).Hash
+
+          $manifest = @{
+            version = $version
+            sha256 = $sha
+            zip_asset_name = $zipName
+          }
+          $manifest | ConvertTo-Json -Depth 5 -Compress | Set-Content "manifest.json" -Encoding UTF8
+
+          Write-Output "zipName=$zipName"
+          Write-Output "zipPath=$zipPath"
+          Write-Output "sha256=$sha"
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      - name: Build Inno Setup installer (best-effort)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # Try to install Inno Setup. If it fails, OTA still works.
+          choco install innosetup -y --no-progress
+
+          if (Get-Command iscc -ErrorAction SilentlyContinue) {
+            iscc "win_setup.iss"
+          } else {
+            Write-Output "iscc not available; skipping installer build."
+          }
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            manifest.json
+            NiziPOS-win-ota-*.zip
+            dist\NiziPOS_Installer*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

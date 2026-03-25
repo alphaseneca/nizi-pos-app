@@ -43,12 +43,45 @@ os.chdir(BASE_DIR)
 
 
 def main():
-    from web_server import start_server_thread, get_device_manager
-    from tray_app import TrayApp
-
     logger.info("═" * 50)
     logger.info("  NiziPOS Background App starting …")
     logger.info("═" * 50)
+
+    # Quit handler — called when user clicks "Quit" in system tray
+    def on_quit():
+        logger.info("Shutting down …")
+        os._exit(0)  # Ensure all threads are terminated immediately
+
+    # Create the PyQt6 Application
+    from PyQt6.QtWidgets import QApplication
+    from ota.version import APP_VERSION
+    from ota.update_manager import UpdateManager
+    from PyQt6.QtGui import QIcon
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
+    # Set global application icon
+    icon_path = os.path.join(BASE_DIR, "icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
+    # ── OTA update check (before starting server/tray UI) ─────────────
+    try:
+        updater = UpdateManager(
+            github_repo=getattr(config, "github_repo", ""),
+            current_version=APP_VERSION,
+            config_dir=config.config_dir,
+        )
+        launched = updater.prompt_and_update(parent_widget=None)
+        if launched:
+            # The updater will restart the new app. Do not start the old version.
+            os._exit(0)
+    except Exception as e:
+        logger.error(f"OTA update check failed (continuing): {e}")
+
+    # Import UI/server after OTA check so "Download latest" can fully block startup.
+    from web_server import start_server_thread, get_device_manager
+    from tray_app import TrayApp
 
     # Start web server in a background thread
     try:
@@ -64,22 +97,11 @@ def main():
     # Start auto-connect polling
     device.start_auto_connect()
 
-    # Quit handler — called when user clicks "Quit" in system tray
+    # Now that we have the device manager, wire quit handler properly.
     def on_quit():
         logger.info("Shutting down …")
         device.disconnect()
         os._exit(0)  # Ensure all threads are terminated immediately
-
-    # Create the PyQt6 Application
-    from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtGui import QIcon
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
-
-    # Set global application icon
-    icon_path = os.path.join(BASE_DIR, "icon.ico")
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
 
     # Create the floating PyQt UI
     from ui_app import TrayFlyout

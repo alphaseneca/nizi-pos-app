@@ -15,6 +15,8 @@ import io
 
 logger = logging.getLogger(__name__)
 
+from ota.version import APP_VERSION
+
 WEB_PORT = 9121
 ICON_SIZE = 64
 
