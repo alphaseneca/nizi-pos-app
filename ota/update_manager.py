@@ -2,6 +2,7 @@ import hashlib
 import logging
 import os
 import re
+import json
 import subprocess
 import sys
 import tempfile
@@ -87,12 +88,17 @@ class UpdateManager:
         if not repo:
             return None
 
+        repo = self._normalize_github_repo(repo)
+        if not repo:
+            return None
+
         api_url = self.github_api_url_template.format(repo=repo)
         headers = {"User-Agent": "NiziPOS-OTA"}
 
         try:
             r = requests.get(api_url, headers=headers, timeout=self.timeout_s)
             if r.status_code != 200:
+                self._write_log(f"[check_latest_release_json] status_code={r.status_code}")
                 return None
             return r.json()
         except Exception as e:
@@ -108,8 +114,14 @@ class UpdateManager:
         try:
             installed_dir = os.path.dirname(sys.executable)
             src_path = os.path.join(installed_dir, "ota_source.json")
-            if not os.path.exists(src_path):
-                return None
+            if not os.path.exists(src_path) or os.path.isdir(src_path):
+                # PyInstaller may bundle `datas` under `_internal/`.
+                src_path = os.path.join(installed_dir, "_internal", "ota_source.json")
+                if os.path.exists(src_path) and os.path.isdir(src_path):
+                    # Some pyinstaller layouts create a folder named `ota_source.json/`
+                    src_path = os.path.join(src_path, "ota_source.json")
+                if not os.path.exists(src_path):
+                    return None
 
             import json
 
@@ -120,6 +132,40 @@ class UpdateManager:
         except Exception as e:
             self._write_log(f"[load_repo_from_embedded_source] failed: {e}")
             return None
+
+    def _normalize_github_repo(self, repo: str) -> str | None:
+        """
+        Accepts:
+          - "owner/repo"
+          - "https://github.com/owner/repo.git"
+          - "git@github.com:owner/repo.git"
+        and returns "owner/repo".
+        """
+        repo = (repo or "").strip()
+        if not repo:
+            return None
+
+        # owner/repo
+        if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            return repo
+
+        # https://github.com/owner/repo(.git)
+        m = re.search(r"github\.com/([^/]+)/([^/]+?)(?:\.git)?$", repo)
+        if m:
+            owner = m.group(1)
+            name = m.group(2)
+            if owner and name:
+                return f"{owner}/{name}"
+
+        # git@github.com:owner/repo(.git)
+        m = re.search(r"git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$", repo)
+        if m:
+            owner = m.group(1)
+            name = m.group(2)
+            if owner and name:
+                return f"{owner}/{name}"
+
+        return None
 
     def _download_text(self, url: str) -> str | None:
         headers = {"User-Agent": "NiziPOS-OTA"}
@@ -175,16 +221,10 @@ class UpdateManager:
             return None
 
         try:
-            manifest = requests.utils.json_loads(manifest_text)
+            manifest = json.loads(manifest_text)
         except Exception:
-            # Fallback to std json parse:
-            import json
-
-            try:
-                manifest = json.loads(manifest_text)
-            except Exception as e:
-                self._write_log(f"[get_update_info] manifest parse failed: {e}")
-                return None
+            self._write_log("[get_update_info] manifest parse failed")
+            return None
 
         latest_version = str(manifest.get("version") or release.get("tag_name") or "")
         sha256 = str(manifest.get("sha256") or "")
@@ -210,6 +250,9 @@ class UpdateManager:
             return None
 
         if not is_version_newer(latest_version, self.current_version):
+            self._write_log(
+                f"[get_update_info] latest not newer latest_version={latest_version!r} current_version={self.current_version!r}"
+            )
             return None
 
         return UpdateInfo(latest_version=latest_version, zip_url=zip_url, sha256=sha256)
@@ -219,6 +262,10 @@ class UpdateManager:
         Returns True if the updater was launched (caller should stop starting the app).
         Returns False if no update / user declined / download failed.
         """
+        self._write_log(
+            f"[startup_check] current_version={self.current_version!r} github_repo_input={self.github_repo!r}"
+        )
+
         try:
             from PyQt6.QtCore import Qt
             from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
@@ -228,6 +275,7 @@ class UpdateManager:
 
         info = self._get_update_info()
         if not info:
+            self._write_log("[startup_check] no update available (or update info missing)")
             return False
 
         # Prompt-first UX.

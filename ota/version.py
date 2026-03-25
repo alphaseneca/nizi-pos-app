@@ -18,7 +18,13 @@ def _read_version_from_version_json() -> str:
     fallback = "1.0.0"
     try:
         if getattr(sys, "frozen", False):
-            candidate = Path(os.path.dirname(sys.executable)) / "version.json"
+            base = Path(os.path.dirname(sys.executable))
+            candidate = base / "version.json"
+            if not candidate.exists():
+                # PyInstaller may bundle `datas` under `_internal/`.
+                candidate = base / "_internal" / "version.json"
+                if candidate.exists() and candidate.is_dir():
+                    candidate = candidate / "version.json"
         else:
             candidate = Path(__file__).resolve().parents[1] / "version.json"
 

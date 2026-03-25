@@ -22,7 +22,7 @@ from PyQt6.QtGui import QFont, QGuiApplication, QIcon
 
 logger = logging.getLogger(__name__)
 
-from ota.version import APP_VERSION
+# Note: we intentionally do not show app version inside the UI.
 
 # ── Modern Stylesheet ────────────────────────────────────────────────────
 
@@ -363,11 +363,6 @@ class TrayFlyout(QWidget):
         title = QLabel("NiziPOS")
         title.setObjectName("headerTitle")
         root.addWidget(title)
-
-        version_label = QLabel(f"v{APP_VERSION}")
-        version_label.setObjectName("versionLabel")
-        version_label.setStyleSheet("font-size: 10pt; color: #6b7280; font-weight: 600; margin-top: -6px;")
-        root.addWidget(version_label)
 
         # Status card
         card = QFrame()
