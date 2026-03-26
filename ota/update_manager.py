@@ -41,14 +41,29 @@ class UpdateManager:
         current_version: str,
         config_dir: Path,
         github_api_url_template: str = "https://api.github.com/repos/{repo}/releases/latest",
-        manifest_asset_name: str = "manifest.json",
+        manifest_asset_name: str | None = None,
         timeout_s: int = 20,
     ):
         self.github_repo = (github_repo or "").strip()
         self.current_version = current_version
         self.config_dir = Path(config_dir)
         self.github_api_url_template = github_api_url_template
-        self.manifest_asset_name = manifest_asset_name
+        if manifest_asset_name:
+            self.manifest_asset_name = manifest_asset_name
+        else:
+            # Choose the platform-specific manifest asset:
+            # - Windows -> manifest-win.json
+            # - Linux -> manifest-linux.json
+            # - macOS -> manifest-macos.json
+            self.manifest_asset_name = (
+                "manifest-win.json"
+                if sys.platform.startswith("win")
+                else "manifest-linux.json"
+                if sys.platform.startswith("linux")
+                else "manifest-macos.json"
+                if sys.platform.startswith("darwin")
+                else "manifest-win.json"
+            )
         self.timeout_s = timeout_s
         self.log_file = self.config_dir / "ota.log"
 
@@ -126,13 +141,14 @@ class UpdateManager:
         if not release:
             return None
 
-        return parse_update_info(
+        info = parse_update_info(
             release,
             current_version=self.current_version,
             manifest_asset_name=self.manifest_asset_name,
             timeout_s=self.timeout_s,
             write_log=self._write_log,
         )
+        return info
 
     def prompt_and_update(self, parent_widget=None) -> bool:
         try:

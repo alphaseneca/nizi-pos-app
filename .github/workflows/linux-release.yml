@@ -29,40 +29,90 @@ jobs:
 
       - name: Prepare build metadata (config.json)
         shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v',''
-          $repo = $env:GITHUB_REPOSITORY
-          $path = "config.json"
-          $meta = Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json
-          $meta.version = $version
-          $meta.github_repo = $repo
-          ($meta | ConvertTo-Json -Compress -Depth 10) | Set-Content -Path $path -Encoding UTF8
+          VERSION_STRIPPED="${VERSION#v}"
+          export VERSION_STRIPPED
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("config.json")
+          meta = json.loads(path.read_text(encoding="utf-8"))
+          meta["version"] = os.environ["VERSION_STRIPPED"]
+          meta["github_repo"] = os.environ["REPO"]
+          path.write_text(
+              json.dumps(meta, separators=(",", ":"), ensure_ascii=False),
+              encoding="utf-8",
+          )
+          PY
 
       - name: Build PyInstaller (main app + ota_updater)
         shell: bash
         run: |
-          Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue && pyinstaller build.spec
+          rm -rf dist build
+          pyinstaller build.spec
 
       - name: Create OTA ZIP (exclude ota_updater)
         id: ota_zip
         shell: bash
         run: |
-          $version = $env:GITHUB_REF_NAME -replace '^v',''
-          $zipName = "NiziPOSConnector-linux-ota-$version.zip"
-          $staging = Join-Path $env:RUNNER_TEMP "nizi_pos_connector_ota_staging"
-          Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          Copy-Item -Path "dist/NiziPOSConnector/*" -Destination $staging -Recurse -Force && Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipName -Force
-          $zipPath = (Resolve-Path $zipName).Path
-          $sha = (Get-FileHash -Algorithm SHA256 $zipPath).Hash
-          $manifest = @{
-            version = $version
-            sha256 = $sha
-            zip_asset_name = $zipName
+          VERSION_STRIPPED="${GITHUB_REF_NAME#v}"
+          ZIP_NAME="NiziPOSConnector-linux-ota-${VERSION_STRIPPED}.zip"
+          STAGING="${RUNNER_TEMP}/nizi_pos_connector_ota_staging"
+
+          rm -rf "$STAGING"
+          mkdir -p "$STAGING"
+
+          cp -r dist/NiziPOSConnector/* "$STAGING"/
+
+          export VERSION_STRIPPED ZIP_NAME STAGING
+
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+
+          staging = Path(os.environ["STAGING"])
+          zip_name = os.environ["ZIP_NAME"]
+
+          # Create ZIP with contents at the root.
+          with zipfile.ZipFile(zip_name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+              for p in staging.rglob("*"):
+                  if p.is_dir():
+                      continue
+                  rel = p.relative_to(staging)
+                  zf.write(p, rel.as_posix())
+
+          data = Path(zip_name).read_bytes()
+          sha = hashlib.sha256(data).hexdigest()
+
+          manifest = {
+              "version": os.environ["VERSION_STRIPPED"],
+              "sha256": sha,
+              "zip_asset_name": zip_name,
           }
-          $manifest | ConvertTo-Json -Depth 5 -Compress | Set-Content "manifest.json" -Encoding UTF8
-          Write-Output "zipName=$zipName"
-          Write-Output "zipPath=$zipPath"
-          Write-Output "sha256=$sha"
+          Path("manifest-linux.json").write_text(
+              json.dumps(manifest, separators=(",", ":"), ensure_ascii=False),
+              encoding="utf-8",
+          )
+
+          print(f"zipName={zip_name}")
+          print(f"zipPath={Path(zip_name).resolve()}")
+          print(f"sha256={sha}")
+          PY
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            manifest-linux.json
+            NiziPOSConnector-linux-ota-*.zip
         env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

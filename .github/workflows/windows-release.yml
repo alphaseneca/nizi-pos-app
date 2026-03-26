@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build -windows:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -69,7 +69,7 @@ jobs:
             sha256 = $sha
             zip_asset_name = $zipName
           }
-          $manifest | ConvertTo-Json -Depth 5 -Compress | Set-Content "manifest.json" -Encoding UTF8
+          $manifest | ConvertTo-Json -Depth 5 -Compress | Set-Content "manifest-win.json" -Encoding UTF8
 
           Write-Output "zipName=$zipName"
           Write-Output "zipPath=$zipPath"
@@ -95,7 +95,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            manifest.json
+            manifest-win.json
             NiziPOSConnector-win-ota-*.zip
             dist\NiziPOSConnector_Installer*.exe
         env:
