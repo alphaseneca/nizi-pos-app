@@ -17,7 +17,9 @@
         <!-- ═══ Header ═══ -->
         <header class="app-header">
             <div class="logo">
-                <div class="logo-icon">⚡</div>
+                <div class="logo-icon">
+                    <img class="logo-img" src="/assets/icon.ico" alt="Nizi POS logo">
+                </div>
                 <div>
                     <h1>Nizi POS Connector</h1>
                     <div class="subtitle">Device control dashboard</div>
@@ -161,9 +163,9 @@
                 <div class="slider-group">
                     <div class="slider-header">
                         <label for="volumeSlider">Volume</label>
-                        <span class="slider-value" id="volumeVal">100</span>
+                        <span class="slider-value" id="volumeVal">—</span>
                     </div>
-                    <input type="range" id="volumeSlider" min="0" max="100" value="100"
+                    <input type="range" id="volumeSlider" min="0" max="100" value="0"
                         oninput="document.getElementById('volumeVal').textContent=this.value">
                     <button class="btn btn-outline btn-sm" style="margin-top:8px"
                         onclick="setSetting('volume', document.getElementById('volumeSlider').value)">Apply</button>
@@ -172,9 +174,9 @@
                 <div class="slider-group">
                     <div class="slider-header">
                         <label for="brightnessSlider">Brightness</label>
-                        <span class="slider-value" id="brightnessVal">100</span>
+                        <span class="slider-value" id="brightnessVal">—</span>
                     </div>
-                    <input type="range" id="brightnessSlider" min="0" max="100" value="100"
+                    <input type="range" id="brightnessSlider" min="0" max="100" value="0"
                         oninput="document.getElementById('brightnessVal').textContent=this.value">
                     <button class="btn btn-outline btn-sm" style="margin-top:8px"
                         onclick="setSetting('brightness', document.getElementById('brightnessSlider').value)">Apply</button>
@@ -183,12 +185,16 @@
                 <div class="slider-group">
                     <div class="slider-header">
                         <label for="screentimeSlider">Screen Time (sec)</label>
-                        <span class="slider-value" id="screentimeVal">300</span>
+                        <span class="slider-value" id="screentimeVal">—</span>
                     </div>
-                    <input type="range" id="screentimeSlider" min="10" max="600" value="300"
+                    <input type="range" id="screentimeSlider" min="10" max="600" value="10"
                         oninput="document.getElementById('screentimeVal').textContent=this.value">
                     <button class="btn btn-outline btn-sm" style="margin-top:8px"
                         onclick="setSetting('screentime', document.getElementById('screentimeSlider').value)">Apply</button>
+                </div>
+
+                <div class="settings-hint" id="settingsHint">
+                    Device settings are not auto-read. Move a slider to choose a value, then press Apply.
                 </div>
             </div>
 

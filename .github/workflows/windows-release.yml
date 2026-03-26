@@ -1,4 +1,4 @@
-name: Release (Build + OTA assets)
+name: Windows Release
 
 on:
   push:

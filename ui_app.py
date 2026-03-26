@@ -394,7 +394,7 @@ class TrayFlyout(QWidget):
         root.setSpacing(16)
 
         # Header
-        title = QLabel("⚡ NIZI POS")
+        title = QLabel("NIZI POS")
         title.setObjectName("headerTitle")
         root.addWidget(title)
 

@@ -86,6 +86,11 @@ def index():
 def favicon():
     return send_from_directory("assets", "icon.ico")
 
+# Serve packaged assets (PyInstaller bundles repo-root `assets/`).
+@app.route("/assets/<path:filename>")
+def assets_file(filename: str):
+    return send_from_directory("assets", filename)
+
 # Lightweight client config for UI (no API-key required).
 @app.route("/client-config")
 def client_config():
