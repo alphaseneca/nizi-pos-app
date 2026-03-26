@@ -18,6 +18,60 @@ class OTALocalCancelled(Exception):
     """Raised when the user cancels an OTA download in the progress dialog."""
 
 
+def _windows_prefers_light_theme() -> bool:
+    """
+    Best-effort Windows light/dark theme detection.
+    Returns True if the user/app prefers light mode.
+    """
+    try:
+        import winreg
+
+        personalize = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, personalize) as key:
+            apps_use_light, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            # 1 = light, 0 = dark
+            return int(apps_use_light) == 1
+    except Exception:
+        return False
+
+
+def _theme_colors(is_light: bool) -> dict[str, str]:
+    # Red accent kept for both themes.
+    accent = "#ef4444"
+    accent2 = "#dc2626"
+
+    if is_light:
+        return {
+            "dialog_bg": "#ffffff",
+            "text": "#0f172a",
+            "muted": "#475569",
+            "border": "#e5e7eb",
+            "secondary_bg": "#f1f5f9",
+            "progress_bg": "#ffffff",
+            "progress_bar_bg": "#f1f5f9",
+            "chunk": accent,
+            "cancel_bg": "#f8fafc",
+            "cancel_border": "#e5e7eb",
+        }
+
+    return {
+        "dialog_bg": "#111827",
+        "text": "#e5e7eb",
+        "muted": "#cbd5e1",
+        "border": "#334155",
+        "secondary_bg": "#0f172a",
+        "progress_bg": "#0b1220",
+        "progress_bar_bg": "#0f172a",
+        "chunk": accent,
+        "cancel_bg": "#0f172a",
+        "cancel_border": "#334155",
+    }
+
+
+class UpdatePromptDialog:  # small namespace holder for type hints
+    pass
+
+
 @dataclass(frozen=True)
 class UpdateInfo:
     latest_version: str
@@ -181,7 +235,15 @@ class UpdateManager:
             self._write_log(f"[download_text] failed: {e}")
             return None
 
-    def _download_to_file(self, url: str, dest_path: Path, *, cancel_check=None, progress_dialog=None):
+    def _download_to_file(
+        self,
+        url: str,
+        dest_path: Path,
+        *,
+        cancel_check=None,
+        progress_dialog=None,
+        label_prefix: str | None = None,
+    ):
         headers = {"User-Agent": "NiziPOS-OTA"}
         # Use a larger read timeout for big ZIP downloads.
         timeout = (10, max(60, int(self.timeout_s) * 6))
@@ -215,6 +277,9 @@ class UpdateManager:
 
                     if progress_dialog is not None and total:
                         progress_dialog.setValue(min(written, total))
+                        if label_prefix:
+                            percent = int((written * 100) / total)
+                            progress_dialog.setLabelText(f"{label_prefix} {percent}%")
 
     def _sha256_file(self, path: Path) -> str:
         h = hashlib.sha256()
@@ -299,7 +364,16 @@ class UpdateManager:
 
         try:
             from PyQt6.QtCore import Qt
-            from PyQt6.QtWidgets import QApplication, QMessageBox, QProgressDialog
+            from PyQt6.QtWidgets import (
+                QApplication,
+                QDialog,
+                QLabel,
+                QPushButton,
+                QHBoxLayout,
+                QVBoxLayout,
+                QMessageBox,
+                QProgressDialog,
+            )
         except Exception as e:
             self._write_log(f"[prompt_and_update] PyQt6 import failed: {e}")
             return False
@@ -309,55 +383,110 @@ class UpdateManager:
             self._write_log("[startup_check] no update available")
             return False
 
-        # Prompt-first UX (styled).
-        # Keep it simple/robust: use plain text (no RichText/HTML), and only style the buttons.
-        msg_plain = (
-            "An update is available.\n\n"
-            f"Current: {self.current_version}\n"
-            f"Latest:  {info.latest_version}\n\n"
-            "Download and update now?"
-        )
+        # Prompt-first UX: custom dialog for a consistent look on Windows.
+        # This avoids QMessageBox stylesheet quirks that caused the "ugly / flat" buttons.
+        current_version = self.current_version
+        latest_version = info.latest_version
+        is_light = _windows_prefers_light_theme()
+        colors = _theme_colors(is_light)
 
-        mb = QMessageBox(parent_widget)
-        mb.setWindowTitle("NiziPOS Update")
-        mb.setIcon(QMessageBox.Icon.Information)
-        mb.setText(msg_plain)
-        mb.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        mb.setDefaultButton(QMessageBox.StandardButton.Yes)
-        mb.setEscapeButton(QMessageBox.StandardButton.No)
+        class UpdatePromptDialogImpl(QDialog):
+            def __init__(self):
+                super().__init__(parent_widget)
+                self._accepted = False
+                self.setWindowTitle("NiziPOS Update")
+                self.setWindowModality(Qt.WindowModality.WindowModal)
+                self.setMinimumWidth(460)
+                self.setMinimumHeight(200)
 
-        # Style: keep it light-touch (plain text + button styling) so the dialog stays readable.
-        mb.setStyleSheet(
-            """
-QMessageBox {
-  background-color: #111827;
-  color: #e5e7eb;
-}
-QLabel {
-  color: #e5e7eb;
-  font-size: 10.5pt;
-}
-QPushButton {
-  border-radius: 9px;
-  padding: 6px 18px;
-  font-weight: 700;
-  min-width: 90px;
-}
-"""
-        )
+                headline = QLabel("An update is available.")
+                headline.setStyleSheet(f"color:{colors['text']}; font-size: 13.5pt; font-weight: 800;")
 
-        # Apply per-button colors (based on button text).
-        try:
-            for b in mb.buttons():
-                if (b.text() or "").strip().lower() == "yes":
-                    b.setStyleSheet("background-color:#4f46e5; color:#ffffff; border:0px;")
-                elif (b.text() or "").strip().lower() == "no":
-                    b.setStyleSheet("background-color:#111827; color:#ffffff; border:1px solid #334155;")
-        except Exception:
-            pass
+                informative = (
+                    f"Current: {current_version}\n"
+                    f"Latest:  {latest_version}\n\n"
+                    "Download and update now?"
+                )
+                info_lbl = QLabel(informative)
+                info_lbl.setWordWrap(True)
+                info_lbl.setStyleSheet(f"color:{colors['muted']}; font-size: 11pt; font-weight: 600;")
 
-        reply = mb.exec()
-        if reply != QMessageBox.StandardButton.Yes:
+                yes_btn = QPushButton("Yes")
+                yes_btn.setObjectName("yesBtn")
+                no_btn = QPushButton("No")
+                no_btn.setObjectName("noBtn")
+
+                def _accept_update():
+                    self._accepted = True
+                    self.accept()
+
+                yes_btn.clicked.connect(_accept_update)
+                no_btn.clicked.connect(self.reject)
+
+                btn_row = QHBoxLayout()
+                btn_row.setSpacing(16)
+                btn_row.addStretch(1)
+                btn_row.addWidget(yes_btn)
+                btn_row.addWidget(no_btn)
+                btn_row.addStretch(1)
+
+                root = QVBoxLayout(self)
+                root.setContentsMargins(18, 18, 18, 14)
+                root.setSpacing(10)
+                root.addWidget(headline)
+                root.addWidget(info_lbl)
+                root.addLayout(btn_row)
+
+                # Build stylesheet without relying on Python's str.format (CSS uses braces).
+                self.setStyleSheet(
+                    (
+                        "QDialog {"
+                        f"background-color: {colors['dialog_bg']};"
+                        f"color: {colors['text']};"
+                        f"border: 1px solid {colors['border']};"
+                        "border-radius: 10px;"
+                        "}"
+                        "QPushButton#yesBtn {"
+                        f"background-color: {colors['chunk']};"
+                        "color: #ffffff;"
+                        "border: 0px;"
+                        "border-radius: 10px;"
+                        "padding: 9px 26px;"
+                        "font-weight: 800;"
+                        "min-width: 120px;"
+                        "}"
+                        "QPushButton#noBtn {"
+                        f"background-color: {colors['secondary_bg']};"
+                        "color: #ffffff;"
+                        f"border: 1px solid {colors['border']};"
+                        "border-radius: 10px;"
+                        "padding: 9px 26px;"
+                        "font-weight: 800;"
+                        "min-width: 120px;"
+                        "}"
+                        "QPushButton:pressed {"
+                        "transform: translateY(1px);"
+                        "}"
+                    )
+                )
+
+            def keyPressEvent(self, event):
+                if event.key() == Qt.Key.Key_Escape:
+                    self.reject()
+                    event.accept()
+                    return
+                super().keyPressEvent(event)
+
+            def closeEvent(self, event):
+                # Treat window X as "No"/cancel.
+                self._accepted = False
+                self.reject()
+                event.accept()
+
+        dlg = UpdatePromptDialogImpl()
+        dlg.exec()
+
+        if not dlg._accepted:
             return False
 
         progress = QProgressDialog("Preparing update...", "Cancel", 0, 0, parent_widget)
@@ -366,33 +495,45 @@ QPushButton {
         progress.setMinimumDuration(0)
         progress.setAutoClose(True)
         progress.setAutoReset(False)
+        progress.setMinimumWidth(480)
+        progress.setMinimumHeight(210)
         progress.setStyleSheet(
-            """
-QProgressDialog {
-  background-color: #111827;
-  color: #ffffff;
-}
-QLabel {
-  color: #e5e7eb;
-  font-size: 10.5pt;
-}
-QPushButton {
-  border-radius: 9px;
-  padding: 6px 16px;
+            f"""
+QProgressDialog {{
+  background-color: {colors['progress_bg']};
+  color: {colors['text']};
+  border: 1px solid {colors['border']};
+  border-radius: 14px;
+  padding: 22px;
+}}
+QLabel {{
+  color: {colors['muted']};
+  font-size: 14pt;
+  font-weight: 800;
+  margin-bottom: 10px;
+}}
+QPushButton {{
+  border-radius: 12px;
+  padding: 10px 26px;
   font-weight: 700;
-  border: 1px solid #334155;
-  color: #ffffff;
-  background-color: #0f172a;
-}
-QProgressBar {
-  height: 10px;
-  border-radius: 5px;
-  background-color: #0f172a;
-}
-QProgressBar::chunk {
-  border-radius: 5px;
-  background-color: #4f46e5;
-}
+  color: {colors['text']};
+  border: 1px solid {colors['cancel_border']};
+  background-color: {colors['cancel_bg']};
+}}
+QProgressBar {{
+  height: 16px;
+  border-radius: 8px;
+  background-color: {colors['progress_bar_bg']};
+  border: 1px solid {colors['border']};
+  margin: 8px 0px 18px 0px;
+  qproperty-alignment: AlignCenter;
+  font-size: 12pt;
+  qproperty-textVisible: false;
+}}
+QProgressBar::chunk {{
+  border-radius: 6px;
+  background-color: {colors['chunk']};
+}}
 """
         )
         progress.show()
@@ -433,7 +574,13 @@ QProgressBar::chunk {
             progress.setRange(0, 0)
             self._write_log(f"[download] url={info.zip_url}")
             QApplication.processEvents()
-            self._download_to_file(info.zip_url, zip_path, cancel_check=_cancel_check, progress_dialog=progress)
+            self._download_to_file(
+                info.zip_url,
+                zip_path,
+                cancel_check=_cancel_check,
+                progress_dialog=progress,
+                label_prefix="Downloading update...",
+            )
 
             if progress.wasCanceled():
                 self._write_log("[download] cancelled by user")
