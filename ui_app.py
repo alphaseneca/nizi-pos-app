@@ -1,6 +1,5 @@
 """
-NiziPOS Floating UI
-A modern, minimalistic PyQt6 window for device control.
+Nizi POS Connector — floating PyQt6 control panel.
 """
 
 import sys
@@ -19,6 +18,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QFont, QGuiApplication, QIcon
+
+from config import APP_NAME
+from theme_support import flyout_dark_stylesheet, prefers_light_theme
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,14 @@ QLabel#fieldLabel {
     background: transparent;
 }
 
+QLabel#modeLabel {
+    font-size: 9pt;
+    color: #374151;
+    font-weight: 600;
+    margin-top: 0px;
+    background: transparent;
+}
+
 QFrame#statusCard {
     background-color: #f9fafb;
     border: 1px solid #e5e7eb;
@@ -94,10 +104,10 @@ QComboBox {
     min-height: 20px;
 }
 QComboBox:hover {
-    border-color: #a5b4fc;
+    border-color: #fca5a5;
 }
 QComboBox:focus {
-    border-color: #6366f1;
+    border-color: #ef4444;
 }
 QComboBox::drop-down {
     subcontrol-origin: padding;
@@ -117,7 +127,7 @@ QComboBox QAbstractItemView {
     border-radius: 8px;
     background-color: #ffffff;
     selection-background-color: #eef2ff;
-    selection-color: #4338ca;
+    selection-color: #b91c1c;
     outline: 0;
     padding: 4px;
 }
@@ -140,11 +150,16 @@ QLineEdit {
     color: #111827;
 }
 QLineEdit:focus {
-    border-color: #6366f1;
+    border-color: #ef4444;
     background-color: #fefefe;
 }
 QLineEdit::placeholder {
     color: #9ca3af;
+}
+
+QLineEdit::selection {
+    background-color: #ef4444;
+    color: #ffffff;
 }
 
 QTextEdit {
@@ -156,7 +171,12 @@ QTextEdit {
     color: #111827;
 }
 QTextEdit:focus {
-    border-color: #6366f1;
+    border-color: #ef4444;
+}
+
+QTextEdit::selection {
+    background-color: #ef4444;
+    color: #ffffff;
 }
 
 /* ── Buttons ──────────────────────────────────────────── */
@@ -164,21 +184,21 @@ QTextEdit:focus {
 QPushButton#primaryBtn {
     font-size: 10pt;
     padding: 10px 20px;
-    background-color: #6366f1;
+    background-color: #ef4444;
     color: #ffffff;
     border: none;
     border-radius: 10px;
     font-weight: 600;
 }
 QPushButton#primaryBtn:hover {
-    background-color: #4f46e5;
+    background-color: #dc2626;
 }
 QPushButton#primaryBtn:pressed {
-    background-color: #4338ca;
+    background-color: #b91c1c;
 }
 QPushButton#primaryBtn:disabled {
-    background-color: #c7d2fe;
-    color: #e0e7ff;
+    background-color: #7f1d1d;
+    color: #fee2e2;
 }
 
 QPushButton#secondaryBtn {
@@ -192,7 +212,7 @@ QPushButton#secondaryBtn {
 }
 QPushButton#secondaryBtn:hover {
     background-color: #f3f4f6;
-    border-color: #a5b4fc;
+    border-color: #fca5a5;
 }
 
 QPushButton#dangerBtn {
@@ -237,18 +257,18 @@ QPushButton#ghostBtn:hover {
 QPushButton#connectBtn {
     font-size: 10pt;
     padding: 10px 20px;
-    background-color: #6366f1;
+    background-color: #ef4444;
     color: #ffffff;
     border: none;
     border-radius: 10px;
     font-weight: 600;
 }
 QPushButton#connectBtn:hover {
-    background-color: #4f46e5;
+    background-color: #dc2626;
 }
 QPushButton#connectBtn:disabled {
-    background-color: #c7d2fe;
-    color: #e0e7ff;
+    background-color: #7f1d1d;
+    color: #fee2e2;
 }
 
 QPushButton#disconnectBtn {
@@ -261,7 +281,7 @@ QPushButton#disconnectBtn {
     font-weight: 500;
 }
 QPushButton#disconnectBtn:hover {
-    border-color: #a5b4fc;
+    border-color: #fca5a5;
     color: #374151;
 }
 
@@ -281,11 +301,11 @@ QRadioButton::indicator {
     background: #ffffff;
 }
 QRadioButton::indicator:hover {
-    border-color: #a5b4fc;
+    border-color: #fca5a5;
 }
 QRadioButton::indicator:checked {
-    border-color: #6366f1;
-    background-color: #6366f1;
+    border-color: #ef4444;
+    background-color: #ef4444;
     image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjUiLz48L3N2Zz4=);
 }
 QRadioButton:disabled {
@@ -317,25 +337,39 @@ class TrayFlyout(QWidget):
         self.web_port = web_port
         self.on_quit_callback = on_quit
 
-        self.setWindowTitle("NiziPOS")
+        self.setWindowTitle(APP_NAME)
         self.setObjectName("mainWindow")
         self.setMinimumWidth(400)
         self.setMaximumWidth(460)
         self.setWindowFlags(
-            Qt.WindowType.Tool
+            Qt.WindowType.Window
             | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowSystemMenuHint
             | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.MSWindowsFixedSizeDialogHint
         )
+        # Ensure minimize/maximize are disabled across platforms.
+        self.setWindowFlag(Qt.WindowType.WindowMinimizeButtonHint, False)
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
         # Resolve arrow icon path and inject into stylesheet
         _base = Path(__file__).resolve().parent
         _arrow = (_base / "assets" / "dropdown_arrow.svg").as_posix()
-        self.setStyleSheet(STYLESHEET.replace("{ARROW_PATH}", _arrow))
+        app = QApplication.instance()
+        palette_lightness = None
+        if app is not None:
+            palette_lightness = app.palette().window().color().lightness()
+        self._light_theme = prefers_light_theme(palette_lightness=palette_lightness)
+        stylesheet = STYLESHEET.replace("{ARROW_PATH}", _arrow)
+        if not self._light_theme:
+            stylesheet += "\n" + flyout_dark_stylesheet()
+        self.setStyleSheet(stylesheet)
 
         self.status_updated.connect(self._on_status_updated)
         self.upload_status_updated.connect(self._on_upload_status)
         self.toggle_visibility.connect(self._toggle_internal)
 
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+        icon_path = os.path.join("assets", "icon.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
@@ -360,7 +394,7 @@ class TrayFlyout(QWidget):
         root.setSpacing(16)
 
         # Header
-        title = QLabel("NiziPOS")
+        title = QLabel("⚡ NIZI POS")
         title.setObjectName("headerTitle")
         root.addWidget(title)
 
@@ -376,8 +410,7 @@ class TrayFlyout(QWidget):
         self.mode_container.setSpacing(20)
         
         mode_lbl = QLabel("Auto-Connect:")
-        mode_lbl.setObjectName("fieldLabel")
-        mode_lbl.setStyleSheet("margin-top: 0px; font-weight: 600; color: #374151;")
+        mode_lbl.setObjectName("modeLabel")
         self.mode_container.addWidget(mode_lbl)
 
         self.radio_auto = QRadioButton("Auto")
@@ -510,22 +543,26 @@ class TrayFlyout(QWidget):
         layout.addWidget(self._make_field_label("Type"))
         self.status_type = QComboBox()
         self.status_type.addItems([
+            "INFO — Information",
             "PASS — Payment Successful",
             "WAIT — Please Wait",
             "FAIL — Payment Failed",
             "WARN — Warning",
-            "INFO — Information",
         ])
         self.status_type.currentTextChanged.connect(self._on_status_type_change)
         layout.addWidget(self.status_type)
 
         layout.addWidget(self._make_field_label("Title / Amount"))
-        self.status_field1 = QLineEdit("SUCCESS!")
+        # Default to INFO so the initial dropdown selection matches fields.
+        self.status_field1 = QLineEdit("Important")
         layout.addWidget(self.status_field1)
 
         layout.addWidget(self._make_field_label("Message"))
-        self.status_field2 = QLineEdit("Payment successful")
+        self.status_field2 = QLineEdit("Keep device connected")
         layout.addWidget(self.status_field2)
+
+        # Ensure fields match the dropdown initial selection (especially after reordering).
+        self._on_status_type_change(self.status_type.currentText())
 
         self.btn_send_status = QPushButton("Send")
         self.btn_send_status.setObjectName("primaryBtn")
@@ -608,7 +645,7 @@ class TrayFlyout(QWidget):
 
         layout.addWidget(self._make_field_label("Screen Size"))
         self.img_size_dropdown = QComboBox()
-        self.img_size_dropdown.addItems(["3.5 inch (320×480)", "2.8 inch (240×320)"])
+        self.img_size_dropdown.addItems(["2.8 inch (240×320)", "3.5 inch (320×480)"])
         layout.addWidget(self.img_size_dropdown)
 
         self.btn_upload_img = QPushButton("Upload to Device")
@@ -751,7 +788,7 @@ class TrayFlyout(QWidget):
         for p in ports:
             label = f"{p['port']} - {p['description']}"
             if p["is_ch340"]:
-                label += " (NiziPOS)"
+                label += f" ({APP_NAME})"
             self.port_dropdown.addItem(label, p["port"])
 
     def _on_mode_changed(self, button):
@@ -762,6 +799,24 @@ class TrayFlyout(QWidget):
         # If switching to manual while disconnected, ensure port UI is visible
         # If switching to auto while disconnected, polling will start
         self._on_status_updated(self.device.connected, self.device.port or "")
+
+    def _apply_device_screen_profile(self):
+        """
+        Auto-select image target size from device ID:
+        - B30/B31 -> 2.8" (240x320)
+        - B32/B33 -> 3.5" (320x480)
+        """
+        device_id = (getattr(self.device, "device_id", None) or "").upper().replace("_", "")
+        if "B30" in device_id or "B31" in device_id:
+            self.img_size_dropdown.setCurrentIndex(0)
+            self.img_size_dropdown.setEnabled(False)
+            return
+        if "B32" in device_id or "B33" in device_id:
+            self.img_size_dropdown.setCurrentIndex(1)
+            self.img_size_dropdown.setEnabled(False)
+            return
+        # Unknown device id: allow manual selection.
+        self.img_size_dropdown.setEnabled(True)
 
     # ── Slot handlers ────────────────────────────────────────────────────
 
@@ -775,6 +830,7 @@ class TrayFlyout(QWidget):
     @pyqtSlot(bool, str)
     def _on_status_updated(self, connected, port):
         if connected:
+            self._apply_device_screen_profile()
             self.status_label.setText("Connected")
             self.status_label.setStyleSheet("color: #16a34a; font-size: 15px; font-weight: 600;")
             self.instruction_label.setText(f"Communicating on {port}")
@@ -790,8 +846,9 @@ class TrayFlyout(QWidget):
             if self.img_file_path:
                 self.btn_upload_img.setEnabled(True)
         else:
+            self.img_size_dropdown.setEnabled(True)
             self.status_label.setText("Disconnected")
-            self.status_label.setStyleSheet("color: #1a1a2e; font-size: 15px; font-weight: 600;")
+            self.status_label.setStyleSheet("color: #64748b; font-size: 15px; font-weight: 600;")
             self.instruction_label.setText("Plug in device to get started.")
             self.btn_action.setText("Connect Now")
             self.btn_action.setObjectName("connectBtn")

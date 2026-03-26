@@ -8,8 +8,15 @@ import tempfile
 import time
 import zipfile
 
+from config import (
+    INSTALL_BACKUP_DIR_PREFIX,
+    MAIN_EXE_BASENAME,
+    OTA_HELPER_CAPTION,
+    OTA_STAGING_DIR_PREFIX,
+)
 
-logger = logging.getLogger("nizipos.ota_updater")
+
+logger = logging.getLogger("nizi_pos_connector.ota_updater")
 
 
 def _configure_logger(log_file: str | None):
@@ -27,7 +34,7 @@ def _configure_logger(log_file: str | None):
         pass
 
 
-def _show_error_box(text: str, caption: str = "NiziPOS OTA Update"):
+def _show_error_box(text: str, caption: str = OTA_HELPER_CAPTION):
     """
     Show a Windows-only message box (best-effort).
     """
@@ -66,15 +73,14 @@ def _move_with_retry(src: str, dst: str, *, retries: int = 25, delay_s: float = 
 
 
 def _find_app_root(extract_root: str) -> str | None:
-    # Common case: zip root contains NiziPOS.exe directly.
-    if os.path.exists(os.path.join(extract_root, "NiziPOS.exe")):
+    main = os.path.join(extract_root, MAIN_EXE_BASENAME)
+    if os.path.exists(main):
         return extract_root
 
-    # Alternate case: zip contains a single top folder, like "NiziPOS/..."
     try:
         for name in os.listdir(extract_root):
             candidate = os.path.join(extract_root, name)
-            if os.path.isdir(candidate) and os.path.exists(os.path.join(candidate, "NiziPOS.exe")):
+            if os.path.isdir(candidate) and os.path.exists(os.path.join(candidate, MAIN_EXE_BASENAME)):
                 return candidate
     except Exception:
         pass
@@ -83,10 +89,14 @@ def _find_app_root(extract_root: str) -> str | None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="NiziPOS OTA updater helper")
-    parser.add_argument("--target-dir", required=True, help="Installed folder containing NiziPOS.exe")
+    parser = argparse.ArgumentParser(description="Nizi POS Connector OTA updater helper")
+    parser.add_argument(
+        "--target-dir", required=True, help=f"Installed folder containing {MAIN_EXE_BASENAME}"
+    )
     parser.add_argument("--update-zip", required=True, help="Downloaded OTA zip file")
-    parser.add_argument("--main-exe", required=False, help="Path to NiziPOS.exe inside target-dir")
+    parser.add_argument(
+        "--main-exe", required=False, help=f"Path to {MAIN_EXE_BASENAME} inside target-dir"
+    )
     parser.add_argument("--log-file", required=False, help="Updater log file path")
     args = parser.parse_args()
 
@@ -114,7 +124,7 @@ def main():
     staging_dir = None
 
     try:
-        staging_dir = tempfile.mkdtemp(prefix="nizipos_ota_staging_")
+        staging_dir = tempfile.mkdtemp(prefix=OTA_STAGING_DIR_PREFIX)
         extract_root = os.path.join(staging_dir, "extract")
         os.makedirs(extract_root, exist_ok=True)
 
@@ -124,21 +134,21 @@ def main():
 
         app_root = _find_app_root(extract_root)
         if not app_root:
-            raise RuntimeError("Could not locate NiziPOS.exe inside the update ZIP.")
+            raise RuntimeError(f"Could not locate {MAIN_EXE_BASENAME} inside the update ZIP.")
 
-        new_main_exe = os.path.join(app_root, "NiziPOS.exe")
+        new_main_exe = os.path.join(app_root, MAIN_EXE_BASENAME)
         if not os.path.exists(new_main_exe):
-            raise RuntimeError("Update ZIP does not contain NiziPOS.exe.")
+            raise RuntimeError(f"Update ZIP does not contain {MAIN_EXE_BASENAME}.")
 
         main_exe_path = (
             os.path.abspath(main_exe_arg)
             if main_exe_arg
-            else os.path.join(target_dir, "NiziPOS.exe")
+            else os.path.join(target_dir, MAIN_EXE_BASENAME)
         )
 
         # Backup everything except the updater itself.
         ts = int(time.time())
-        backup_dir = os.path.join(os.path.dirname(target_dir), f"NiziPOS_backup_{ts}")
+        backup_dir = os.path.join(os.path.dirname(target_dir), f"{INSTALL_BACKUP_DIR_PREFIX}{ts}")
         os.makedirs(backup_dir, exist_ok=False)
 
         logger.info(f"Backing up old install to: {backup_dir}")
@@ -170,9 +180,10 @@ def main():
             else:
                 shutil.copy2(src, dst)
 
-        # Validate at least NiziPOS.exe exists post-install.
         if not os.path.exists(main_exe_path):
-            raise RuntimeError("Update failed validation: NiziPOS.exe not found after install.")
+            raise RuntimeError(
+                f"Update failed validation: {MAIN_EXE_BASENAME} not found after install."
+            )
 
         # Cleanup backup after success.
         try:
@@ -206,7 +217,7 @@ def main():
                     _move_with_retry(src, dst)
 
                 # Try to launch the current (restored) version.
-                restored_main = os.path.join(target_dir, "NiziPOS.exe")
+                restored_main = os.path.join(target_dir, MAIN_EXE_BASENAME)
                 if os.path.exists(restored_main):
                     subprocess.Popen([restored_main], cwd=target_dir)
             except Exception:

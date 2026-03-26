@@ -1,7 +1,9 @@
 openapi: 3.0.3
 info:
-  title: NiziPOS Background Service API
-  description: API for controlling the NiziPOS UART display device. All endpoints require the `X-API-Key` header and must be accessed from localhost.
+  title: Nizi POS Connector API
+  description: >-
+    REST API for the Nizi POS Connector local service (UART display).
+    All endpoints require the `X-API-Key` header and are intended for localhost use only.
   version: 1.0.0
 servers:
   - url: http://127.0.0.1:9121

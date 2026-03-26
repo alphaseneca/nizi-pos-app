@@ -1,7 +1,5 @@
 """
-NiziPOS Web Server
-Flask + Flask-SocketIO web server exposing REST API and real-time events
-for controlling the NiziPOS UART display device.
+Nizi POS Connector — Flask + Flask-SocketIO server (REST + realtime) for the UART display.
 """
 
 import logging
@@ -68,7 +66,10 @@ def add_cors_headers(response):
 
 def _on_device_status(connected: bool, port: str | None):
     """Push connection status to all connected browser clients."""
-    socketio.emit("device_status", {"connected": connected, "port": port})
+    socketio.emit(
+        "device_status",
+        {"connected": connected, "port": port, "device_id": device.device_id},
+    )
 
 
 device.set_status_callback(_on_device_status)
@@ -83,7 +84,17 @@ def index():
 
 @app.route("/favicon.ico")
 def favicon():
-    return send_from_directory(".", "icon.ico")
+    return send_from_directory("assets", "icon.ico")
+
+# Lightweight client config for UI (no API-key required).
+@app.route("/client-config")
+def client_config():
+    return jsonify(
+        {
+            "contact_url": config.contact_url,
+            "whatsapp_url": config.whatsapp_url,
+        }
+    )
 
 
 # ── REST API ─────────────────────────────────────────────────────────────
@@ -91,7 +102,7 @@ def favicon():
 
 @app.route("/api/status")
 def api_status():
-    return jsonify({"connected": device.connected, "port": device.port})
+    return jsonify({"connected": device.connected, "port": device.port, "device_id": device.device_id})
 
 
 @app.route("/api/connect", methods=["POST"])
@@ -228,7 +239,7 @@ def ws_connect(auth=None):
     
     socketio.emit(
         "device_status",
-        {"connected": device.connected, "port": device.port},
+        {"connected": device.connected, "port": device.port, "device_id": device.device_id},
     )
 
 

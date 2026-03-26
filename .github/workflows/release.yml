@@ -27,20 +27,18 @@ jobs:
           pip install pyinstaller
         shell: pwsh
 
-      - name: Prepare build metadata (version + github repo)
+      - name: Prepare build metadata (config.json)
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v',''
           $repo = $env:GITHUB_REPOSITORY
+          $path = "config.json"
+          $meta = Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json
+          $meta.version = $version
+          $meta.github_repo = $repo
+          ($meta | ConvertTo-Json -Compress -Depth 10) | Set-Content -Path $path -Encoding UTF8
 
-          # Update OTA embedded source so the app knows which repo to query.
-          $srcPath = "ota_source.json"
-          Set-Content -Path $srcPath -Value (@{ github_repo = $repo } | ConvertTo-Json -Compress) -Encoding UTF8
-
-          # Update the single version source-of-truth for correct OTA comparisons and app display.
-          Set-Content -Path "version.json" -Value (@{ version = $version } | ConvertTo-Json -Compress) -Encoding UTF8
-
-      - name: Build PyInstaller (NiziPOS + ota_updater)
+      - name: Build PyInstaller (main app + ota_updater)
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue
@@ -51,16 +49,16 @@ jobs:
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v',''
-          $zipName = "NiziPOS-win-ota-$version.zip"
+          $zipName = "NiziPOSConnector-win-ota-$version.zip"
 
-          $staging = Join-Path $env:RUNNER_TEMP "nizipos_ota_staging"
+          $staging = Join-Path $env:RUNNER_TEMP "nizi_pos_connector_ota_staging"
           Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
-          Copy-Item -Path "dist\NiziPOS\*" -Destination $staging -Recurse -Force
+          Copy-Item -Path "dist\NiziPOSConnector\*" -Destination $staging -Recurse -Force
           Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $staging "ota_updater.exe")
 
-          # Zip contents at the zip root (NiziPOS.exe, static/, assets/, ...)
+          # Zip contents at the zip root (main .exe, static/, assets/, ...)
           Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipName -Force
 
           $zipPath = (Resolve-Path $zipName).Path
@@ -98,8 +96,8 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: |
             manifest.json
-            NiziPOS-win-ota-*.zip
-            dist\NiziPOS_Installer*.exe
+            NiziPOSConnector-win-ota-*.zip
+            dist\NiziPOSConnector_Installer*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

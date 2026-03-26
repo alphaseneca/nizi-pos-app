@@ -1,12 +1,7 @@
 """
-NiziPOS Background Application — Entry Point
+Nizi POS Connector — entry point.
 
-Starts:
-  1. Flask web server (daemon thread) on port 9121
-  2. System tray icon (main thread)
-
-The tray icon provides connect/disconnect/open dashboard/quit controls.
-Visit http://localhost:9121 for the full web dashboard.
+Starts the Flask web server (background thread) and the system tray UI (main thread).
 """
 
 import logging
@@ -15,7 +10,7 @@ import sys
 
 # ── Logging ──────────────────────────────────────────────────────────────
 
-from config import config
+from config import APP_NAME, APP_VERSION, config
 
 # Ensure log directory exists
 log_file = config.config_dir / "app.log"
@@ -28,7 +23,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-logger = logging.getLogger("nizipos")
+logger = logging.getLogger("nizi_pos_connector")
 
 # ── Resolve paths when running as frozen exe ─────────────────────────────
 
@@ -44,7 +39,7 @@ os.chdir(BASE_DIR)
 
 def main():
     logger.info("═" * 50)
-    logger.info("  NiziPOS Background App starting …")
+    logger.info("  %s starting …", APP_NAME)
     logger.info("═" * 50)
 
     # Quit handler — called when user clicks "Quit" in system tray
@@ -54,14 +49,13 @@ def main():
 
     # Create the PyQt6 Application
     from PyQt6.QtWidgets import QApplication
-    from ota.version import APP_VERSION
-    from ota.update_manager import UpdateManager
+    from ota import UpdateManager
     from PyQt6.QtGui import QIcon
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
     # Set global application icon
-    icon_path = os.path.join(BASE_DIR, "icon.ico")
+    icon_path = os.path.join(BASE_DIR, "assets", "icon.ico")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
 

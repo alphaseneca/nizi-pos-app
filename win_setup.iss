@@ -1,80 +1,66 @@
 ; ---------------------------------------
-; NiziPOS Installer Script
+; Nizi POS Connector — Inno Setup installer
 ; Requires Inno Setup Compiler
 ; ---------------------------------------
+;
+; App version from repo-root config.json at compile time (file must be single-line JSON so the first line contains "version":"…").
 
-; Build-time version extraction from `version.json`
-#define VersionFileHandle FileOpen("version.json")
-#if VersionFileHandle
-  #define VersionJsonLine FileRead(VersionFileHandle)
-  #expr FileClose(VersionFileHandle)
+#ifndef AppVer
+#define AppVer "1.0.0"
+#endif
 
-  ; Extract version value from minified JSON: {"version":"1.2.3"}
-  ; We assume the file line contains the substring: "version":"<value>"
-  #define KeyPos Pos('"version":"', VersionJsonLine)
-  #if KeyPos
-    #define VersionValueStart KeyPos + 11
-    #define VersionValueEnd Pos('"', Copy(VersionJsonLine, VersionValueStart))
-    #define AppVer Copy(Copy(VersionJsonLine, VersionValueStart), 1, VersionValueEnd - 1)
-  #else
-    #define AppVer "1.0.0"
+#define InstallerVersionJsonPath AddBackslash(SourcePath) + "config.json"
+
+#if FileExists(InstallerVersionJsonPath)
+  #define InstallerVersionFileHandle FileOpen(InstallerVersionJsonPath)
+  #if InstallerVersionFileHandle
+    #define InstallerVersionJsonLine FileRead(InstallerVersionFileHandle)
+    #expr FileClose(InstallerVersionFileHandle)
+
+    #define InstallerVersionKeyPos Pos('"version":"', InstallerVersionJsonLine)
+    #if InstallerVersionKeyPos
+      #define InstallerVersionValueStart (InstallerVersionKeyPos + 11)
+      #define InstallerVersionValueEnd Pos('"', Copy(InstallerVersionJsonLine, InstallerVersionValueStart))
+      #undef AppVer
+      #define AppVer Copy(Copy(InstallerVersionJsonLine, InstallerVersionValueStart), 1, (InstallerVersionValueEnd - 1))
+    #endif
   #endif
-#else
-  #define AppVer "1.0.0"
 #endif
 
 [Setup]
-AppName=NiziPOS
+AppName=Nizi POS Connector
 AppVersion={#AppVer}
-AppPublisher=Nizi Store
-AppPublisherURL=https://nizistore.com
-DefaultDirName={localappdata}\NiziPOS
-DefaultGroupName=NiziPOS
+AppPublisher=Yarsa Tech
+AppPublisherURL=https://yarsa.tech/
+DefaultDirName={localappdata}\NiziPOSConnector
+DefaultGroupName=Nizi POS Connector
 OutputDir=dist
-OutputBaseFilename=NiziPOS_Installer
-SetupIconFile=setup_icon.ico
-UninstallDisplayIcon={app}\NiziPOS.exe
+OutputBaseFilename=NiziPOSConnector_Installer
+SetupIconFile=assets\\setup_icon.ico
+UninstallDisplayIcon={app}\NiziPOSConnector.exe
 DisableProgramGroupPage=yes
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=lowest
 
-; ---------------------------------------
 [Files]
-; Copy the whole PyInstaller onedir folder
-Source: "dist\NiziPOS\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "dist\NiziPOSConnector\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "dist\NiziPOSConnector\ota_updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; Include updater if any
-Source: "dist\NiziPOS\ota_updater.exe"; DestDir: "{app}"; Flags: ignoreversion
-
-; (Icon is embedded in NiziPOS.exe)
-
-; ---------------------------------------
 [Icons]
-; Start Menu shortcut
-Name: "{group}\NiziPOS"; Filename: "{app}\NiziPOS.exe"; WorkingDir: "{app}"
+Name: "{group}\Nizi POS Connector"; Filename: "{app}\NiziPOSConnector.exe"; WorkingDir: "{app}"
+Name: "{userdesktop}\Nizi POS Connector"; Filename: "{app}\NiziPOSConnector.exe"; Tasks: desktopicon
 
-; Desktop shortcut
-Name: "{userdesktop}\NiziPOS"; Filename: "{app}\NiziPOS.exe"; Tasks: desktopicon
-
-; ---------------------------------------
 [Tasks]
 Name: desktopicon; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
+Name: autostart; Description: "Start Nizi POS Connector automatically at login"
 
-; Auto-start task
-Name: autostart; Description: "Start NiziPOS automatically at login"
-
-; ---------------------------------------
 [Run]
-Filename: "{app}\NiziPOS.exe"; Description: "Launch NiziPOS"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\NiziPOSConnector.exe"; Description: "Launch Nizi POS Connector"; Flags: nowait postinstall skipifsilent
 
-; ---------------------------------------
 [Registry]
-; Auto-start registry key for current user
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-ValueType: string; ValueName: "NiziPOS"; ValueData: "{app}\NiziPOS.exe"; Flags: uninsdeletevalue; Tasks: autostart
+ValueType: string; ValueName: "NiziPOSConnector"; ValueData: "{app}\NiziPOSConnector.exe"; Flags: uninsdeletevalue; Tasks: autostart
 
-; ---------------------------------------
 [UninstallDelete]
-; Remove installed folder on uninstall
 Type: filesandordirs; Name: "{app}"

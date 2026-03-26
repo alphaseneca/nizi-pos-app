@@ -1,7 +1,5 @@
 """
-NiziPOS System Tray Application
-Provides a system tray icon with connect/disconnect/open dashboard/quit options.
-Icon color changes based on device connection state.
+Nizi POS Connector — system tray icon and menu (connect / dashboard / quit).
 """
 
 import logging
@@ -13,9 +11,9 @@ from PyQt6.QtCore import QObject
 from PIL import Image, ImageDraw
 import io
 
-logger = logging.getLogger(__name__)
+from config import APP_NAME
 
-from ota.version import APP_VERSION
+logger = logging.getLogger(__name__)
 
 WEB_PORT = 9121
 ICON_SIZE = 64
@@ -48,7 +46,7 @@ def _create_qicon(connected: bool) -> QIcon:
 
 
 class TrayApp(QObject):
-    """System tray application for NiziPOS background service using PyQt6."""
+    """System tray shell for the background connector service (PyQt6)."""
 
     def __init__(self, device_manager, ui_app=None, on_quit=None):
         super().__init__()
@@ -80,7 +78,7 @@ class TrayApp(QObject):
 
     def _update_icon(self):
         """Update the tray icon image to reflect connection state."""
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+        icon_path = os.path.join("assets", "icon.ico")
         
         if os.path.exists(icon_path):
             try:
@@ -109,7 +107,7 @@ class TrayApp(QObject):
         else:
             self._tray_icon.setIcon(_create_qicon(self._connected))
             
-        tip = "NiziPOS — Connected" if self._connected else "NiziPOS — Disconnected"
+        tip = f"{APP_NAME} — Connected" if self._connected else f"{APP_NAME} — Disconnected"
         self._tray_icon.setToolTip(tip)
 
     def _on_tray_activated(self, reason):
@@ -164,7 +162,7 @@ class TrayApp(QObject):
         
         menu.addSeparator()
         
-        quit_action = QAction("Quit NiziPOS", self)
+        quit_action = QAction(f"Quit {APP_NAME}", self)
         quit_action.triggered.connect(self._on_exit)
         menu.addAction(quit_action)
         

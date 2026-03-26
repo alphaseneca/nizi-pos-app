@@ -1,6 +1,5 @@
 """
-NiziPOS Device Manager
-Handles serial (UART) communication with the NiziPOS display device.
+Serial (UART) device manager for the Nizi POS Connector–attached display.
 """
 
 import struct
@@ -15,7 +14,7 @@ import re
 logger = logging.getLogger(__name__)
 
 DEVICE_ID_COMMAND = "DEVICE_ID"
-# Support NIZIPOS_B3X or NIZI_POS_B3X (X is 0-9)
+# Hardware IDs: `NIZIPOS_B3X` / `NIZI_POS_B3X` (X = 0–9) — UART protocol, not the app display name.
 DEVICE_ID_PATTERN = re.compile(r"NIZI_?POS_B3\d", re.IGNORECASE)
 DEFAULT_BAUD_RATE = 115200
 SERIAL_TIMEOUT = 2  # seconds
@@ -33,12 +32,13 @@ CH340_PIDS = [0x7523, 0x5523, 0x5512, 0x7522]
 
 
 class DeviceManager:
-    """Thread-safe manager for NiziPOS UART device communication."""
+    """Thread-safe UART communication with the connected display."""
 
     def __init__(self):
         self._serial: serial.Serial | None = None
         self._lock = threading.Lock()
         self._port: str | None = None
+        self._device_id: str | None = None
         self._connected = False
         self._auto_connect = True  # Flag to enable/disable auto-connection polling
         self._on_status_change = None  # callback(connected: bool, port: str | None)
@@ -52,6 +52,10 @@ class DeviceManager:
     @property
     def port(self) -> str | None:
         return self._port
+
+    @property
+    def device_id(self) -> str | None:
+        return self._device_id
 
     def enable_auto_connect(self, enabled: bool):
         """Enable or disable the background auto-connect polling logic."""
@@ -171,7 +175,8 @@ class DeviceManager:
             # Use ASCII arrows to avoid mojibake in some Windows consoles/log viewers.
             logger.info(f"  <- {response!r}")
 
-            if DEVICE_ID_PATTERN.search(response):
+            device_id = self._extract_device_id(response)
+            if device_id:
                 ser.close()
                 return device
 
@@ -180,6 +185,30 @@ class DeviceManager:
             logger.debug(f"  skip {device}: {exc}")
         return None
 
+    def _extract_device_id(self, response: str) -> str | None:
+        if not response:
+            return None
+        m = DEVICE_ID_PATTERN.search(response)
+        if not m:
+            return None
+        return m.group(0).upper().replace("_", "")
+
+    def _query_device_id(self) -> str | None:
+        """
+        Query current connected serial for DEVICE_ID and return normalized value
+        like NIZIPOSB31, or None on failure.
+        """
+        if not self._serial or not self._serial.is_open:
+            return None
+        try:
+            self._serial.reset_input_buffer()
+            self._serial.write((DEVICE_ID_COMMAND + "\n").encode("utf-8"))
+            self._serial.flush()
+            response = self._serial.readline().decode("utf-8", errors="ignore").strip()
+            return self._extract_device_id(response)
+        except Exception:
+            return None
+
     def connect(self, port: str | None = None) -> dict:
         """
         Connect to the device.  If *port* is None, auto-detect is used.
@@ -187,7 +216,7 @@ class DeviceManager:
         """
         with self._lock:
             if self._connected:
-                return {"success": True, "port": self._port, "error": None}
+                return {"success": True, "port": self._port, "device_id": self._device_id, "error": None}
 
             if port is None:
                 port = self.auto_detect()
@@ -195,7 +224,7 @@ class DeviceManager:
                     return {
                         "success": False,
                         "port": None,
-                        "error": "No NiziPOS device found on any COM port.",
+                        "error": "No matching display device found on any COM port.",
                     }
 
             try:
@@ -205,13 +234,14 @@ class DeviceManager:
                     timeout=SERIAL_TIMEOUT,
                 )
                 time.sleep(0.1)
+                self._device_id = self._query_device_id()
                 self._port = port
                 self._connected = True
-                logger.info(f"Connected to {port}")
+                logger.info(f"Connected to {port} ({self._device_id or 'unknown device id'})")
                 self._notify_status()
-                return {"success": True, "port": port, "error": None}
+                return {"success": True, "port": port, "device_id": self._device_id, "error": None}
             except serial.SerialException as exc:
-                return {"success": False, "port": port, "error": str(exc)}
+                return {"success": False, "port": port, "device_id": None, "error": str(exc)}
 
     def disconnect(self) -> dict:
         """Disconnect from the device."""
@@ -223,6 +253,7 @@ class DeviceManager:
                     pass
             self._serial = None
             self._port = None
+            self._device_id = None
             self._connected = False
             logger.info("Disconnected")
             self._notify_status()

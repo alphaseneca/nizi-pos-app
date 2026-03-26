@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for NiziPOS Background App.
+PyInstaller spec for Nizi POS Connector (main app + OTA helper).
 Build with:  pyinstaller build.spec
 """
 
@@ -23,9 +23,7 @@ a_main = Analysis(
     datas=[
         (os.path.join(base_dir, 'static'), 'static'),
         (os.path.join(base_dir, 'assets'), 'assets'),
-        (os.path.join(base_dir, 'icon.ico'), '.'),
-        (os.path.join(base_dir, 'ota_source.json'), 'ota_source.json'),
-        (os.path.join(base_dir, 'version.json'), 'version.json'),
+        (os.path.join(base_dir, 'config.json'), '.'),
     ],
     hiddenimports=[
         'flask',
@@ -58,7 +56,7 @@ exe_main = EXE(
     a_main.scripts,
     [],                      # Move binaries/zipfiles/datas to COLLECT for non-onefile macOS bundle
     exclude_binaries=True,   # Required for BUNDLE on macOS sometimes
-    name='NiziPOS',       # Internal name
+    name='NiziPOSConnector',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -70,7 +68,7 @@ exe_main = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(base_dir, 'icon.ico'),
+    icon=os.path.join(base_dir, 'assets', 'icon.ico'),
 )
 
 #
@@ -110,7 +108,7 @@ exe_updater = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(base_dir, 'icon.ico'),
+    icon=os.path.join(base_dir, 'assets', 'icon.ico'),
 )
 
 coll = COLLECT(
@@ -122,16 +120,16 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='NiziPOS',
+    name='NiziPOSConnector',
 )
 
 # Added BUNDLE for macOS to create a proper .app and hide terminal
 if is_mac:
     app = BUNDLE(
         coll,                # Use collective binaries
-        name='NiziPOS.app',
-        icon=os.path.join(base_dir, 'icon.ico'),
-        bundle_identifier='com.nizistore.nizipos',
+        name='NiziPOSConnector.app',
+        icon=os.path.join(base_dir, 'assets', 'icon.ico'),
+        bundle_identifier='com.yarsatech.nizi-pos-connector',
         info_plist={
             'LSUIElement': True,
             'NSHighResolutionCapable': 'True'

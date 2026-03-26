@@ -1,5 +1,5 @@
 """
-Verification script for NiziPOS hardening.
+Verification script for Nizi POS Connector API hardening.
 Tests:
 1. API Key Authentication (Success/Failure)
 2. Binding (Localhost only)
@@ -103,5 +103,5 @@ class TestHardening(unittest.TestCase):
         self.assertTrue(connected_correct_auth, "Should connect with correct token")
 
 if __name__ == "__main__":
-    print(f"Testing NiziPOS at {BASE_URL}...")
+    print(f"Testing Nizi POS Connector at {BASE_URL}...")
     unittest.main()

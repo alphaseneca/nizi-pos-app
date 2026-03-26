@@ -1,10 +1,10 @@
-# NiziPOS API Documentation
+# Nizi POS Connector API Documentation
 
-The NiziPOS background service exposes a REST API on `http://127.0.0.1:9121` for controlling the connected UART display device.
+The Nizi POS Connector background service exposes a REST API on `http://127.0.0.1:9121` for controlling the connected UART display device.
 
 ## Authentication is handled via a fixed API key. This key is provided to authorized users via email and must be included in the `X-API-Key` header for all requests.
 
-**Fixed API Token:** `nizipos-fixed-secret-token` (Placeholder — refer to your distribution email)
+**Fixed API Token:** (Refer to your distribution email — documentation uses a placeholder name only, not the live secret.)
 
 | Header | Description |
 | :--- | :--- |

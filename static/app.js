@@ -1,6 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   NiziPOS Dashboard — Client-Side Application Logic
+   Nizi POS Connector — dashboard client
    ═══════════════════════════════════════════════════════════════════════ */
+
+const API_KEY_STORAGE = "nizi_pos_connector_api_key";
+const API_KEY_STORAGE_LEGACY = "nizipos_api_key";
+let YARSA_CONTACT_URL = "https://yarsa.tech/contact";
+let YARSA_WHATSAPP_URL = "https://wa.me/9779800959042?text=HI%20Yarsa%20Tech.%20Please%20provide%20me%20the%20API";
 
 // ── SocketIO Connection ──────────────────────────────────────────────
 
@@ -13,17 +18,23 @@ let apiKey = null;
 // ── Authentication ───────────────────────────────────────────────────
 
 function getStoredApiKey() {
-    return localStorage.getItem("nizipos_api_key");
+    return (
+        localStorage.getItem(API_KEY_STORAGE) ||
+        localStorage.getItem(API_KEY_STORAGE_LEGACY)
+    );
 }
 
-function saveApiKey() {
+async function saveApiKey() {
     const input = document.getElementById("apiKeyInput");
     const key = input.value.trim();
     if (key.length < 10) {
         showToast("Invalid API Key format", "error");
         return;
     }
-    localStorage.setItem("nizipos_api_key", key);
+    localStorage.setItem(API_KEY_STORAGE, key);
+    try {
+        localStorage.removeItem(API_KEY_STORAGE_LEGACY);
+    } catch (_e) {}
     apiKey = key;
     document.getElementById("setupModal").classList.remove("active");
     
@@ -34,7 +45,10 @@ function saveApiKey() {
     addLog("API Key updated manually.", "info");
     
     // Retry initial status
-    refreshStatus();
+    const res = await refreshStatus();
+    if (res && res.success === false) {
+        showToast("Unauthorized API key. Please verify the token.", "error");
+    }
 }
 
 function showSetupModal() {
@@ -59,7 +73,7 @@ socket.on("disconnect", () => {
 });
 
 socket.on("device_status", (data) => {
-    updateStatusUI(data.connected, data.port);
+    updateStatusUI(data.connected, data.port, data.device_id);
 });
 
 socket.on("command_result", (data) => {
@@ -72,7 +86,24 @@ socket.on("command_result", (data) => {
 
 // ── Status UI ────────────────────────────────────────────────────────
 
-function updateStatusUI(connected, port) {
+function applyScreenSizeByDeviceId(deviceId, connected) {
+    const screenSize = document.getElementById("screenSize");
+    if (!screenSize) return;
+    const normalized = String(deviceId || "").toUpperCase().replaceAll("_", "");
+    if (normalized.includes("B30") || normalized.includes("B31")) {
+        screenSize.value = "240x320";
+        screenSize.disabled = true;
+        return;
+    }
+    if (normalized.includes("B32") || normalized.includes("B33")) {
+        screenSize.value = "320x480";
+        screenSize.disabled = true;
+        return;
+    }
+    screenSize.disabled = !!connected;
+}
+
+function updateStatusUI(connected, port, deviceId = null) {
     const badge = document.getElementById("statusBadge");
     const text = document.getElementById("statusText");
     const portLabel = document.getElementById("portLabel");
@@ -80,7 +111,8 @@ function updateStatusUI(connected, port) {
     if (connected) {
         badge.classList.add("connected");
         text.textContent = "Connected";
-        portLabel.textContent = port ? `(${port})` : "";
+        const suffix = deviceId ? ` • ${deviceId}` : "";
+        portLabel.textContent = port ? `(${port}${suffix})` : "";
         addLog(`Device connected on ${port}`, "success");
         showToast("Device connected!", "success");
     } else {
@@ -88,6 +120,7 @@ function updateStatusUI(connected, port) {
         text.textContent = "Disconnected";
         portLabel.textContent = "";
     }
+    applyScreenSizeByDeviceId(deviceId, connected);
 }
 
 // ── API Calls ────────────────────────────────────────────────────────
@@ -118,8 +151,8 @@ async function api(method, url, body = null) {
         const res = await fetch(url, opts);
         if (res.status === 401) {
             apiKey = null;
-            localStorage.removeItem("nizipos_api_key");
-            showSetupModal();
+            // Do not re-open the setup modal automatically on every 401.
+            // Modal is shown only on explicit validation (initial load / after save).
             return { success: false, error: "Unauthorized" };
         }
         return await res.json();
@@ -155,7 +188,7 @@ async function disconnectDevice() {
     if (res.success) {
         addLog("Disconnected.", "info");
         showToast("Device disconnected.", "info");
-        updateStatusUI(false, null);
+        updateStatusUI(false, null, null);
     }
 }
 
@@ -329,15 +362,36 @@ function showToast(message, type = "info", duration = 3000) {
 
 async function refreshStatus() {
     const res = await api("GET", "/api/status");
-    if (res && res.success !== false) updateStatusUI(res.connected, res.port);
+    if (res && res.success !== false) updateStatusUI(res.connected, res.port, res.device_id);
+    return res;
+}
+
+function openContactUs() {
+    window.open(YARSA_CONTACT_URL, "_blank", "noopener,noreferrer");
+}
+
+function openWhatsAppSupport() {
+    window.open(YARSA_WHATSAPP_URL, "_blank", "noopener,noreferrer");
+}
+
+async function loadClientConfig() {
+    try {
+        const res = await fetch("/client-config", { method: "GET" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.contact_url) YARSA_CONTACT_URL = data.contact_url;
+        if (data && data.whatsapp_url) YARSA_WHATSAPP_URL = data.whatsapp_url;
+    } catch (_e) {}
 }
 
 (async () => {
     apiKey = getStoredApiKey();
+    loadClientConfig();
     if (!apiKey) {
         showSetupModal();
     } else {
         connectSocket();
-        refreshStatus();
+        const res = await refreshStatus();
+        if (res && res.success === false) showSetupModal();
     }
 })();
