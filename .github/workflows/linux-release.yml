@@ -1,0 +1,68 @@
+name: Linux Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+      contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+        shell: bash
+
+      - name: Prepare build metadata (config.json)
+        shell: bash
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v',''
+          $repo = $env:GITHUB_REPOSITORY
+          $path = "config.json"
+          $meta = Get-Content -Path $path -Raw -Encoding UTF8 | ConvertFrom-Json
+          $meta.version = $version
+          $meta.github_repo = $repo
+          ($meta | ConvertTo-Json -Compress -Depth 10) | Set-Content -Path $path -Encoding UTF8
+
+      - name: Build PyInstaller (main app + ota_updater)
+        shell: bash
+        run: |
+          Remove-Item -Recurse -Force dist, build -ErrorAction SilentlyContinue && pyinstaller build.spec
+
+      - name: Create OTA ZIP (exclude ota_updater)
+        id: ota_zip
+        shell: bash
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v',''
+          $zipName = "NiziPOSConnector-linux-ota-$version.zip"
+          $staging = Join-Path $env:RUNNER_TEMP "nizi_pos_connector_ota_staging"
+          Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Copy-Item -Path "dist/NiziPOSConnector/*" -Destination $staging -Recurse -Force && Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipName -Force
+          $zipPath = (Resolve-Path $zipName).Path
+          $sha = (Get-FileHash -Algorithm SHA256 $zipPath).Hash
+          $manifest = @{
+            version = $version
+            sha256 = $sha
+            zip_asset_name = $zipName
+          }
+          $manifest | ConvertTo-Json -Depth 5 -Compress | Set-Content "manifest.json" -Encoding UTF8
+          Write-Output "zipName=$zipName"
+          Write-Output "zipPath=$zipPath"
+          Write-Output "sha256=$sha"
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
